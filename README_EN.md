@@ -6,7 +6,7 @@ Mirrors the complete live MMI output of an MIB2Q head unit to the Audi Virtual
 Cockpit.
 
 This repository keeps [jilleb/mib2-toolbox](https://github.com/jilleb/mib2-toolbox)
-as its full base and adds the Green Engineering Menu, the B3-OPT v50 runtime,
+as its full base and adds the Green Engineering Menu, the B3-OPT v51 runtime,
 fail-safe recovery, log recording, and reproducible source code. It is not
 CarPlay AltScreen and it is not a turn-by-turn icon forwarder. It captures the
 whole MMI output: when the center screen shows CarPlay the cockpit shows
@@ -110,6 +110,11 @@ The snapshot includes status, measured FPS, renderer/EGL output, clock-host
 output, watchdog state, Java context state, recorded PIDs, and DisplayManager
 state.
 
+Persistent logs are bounded: each START truncates the previous active logs,
+and the watchdog checks high-volume logs once per minute. A file above 2 MiB
+is rotated to a single `.previous` copy, so each managed log uses about 4 MiB
+at most. LOG RECORD snapshots are created only when explicitly selected.
+
 ## Repository layout
 
 ```text
@@ -126,7 +131,9 @@ docs/B3_REPRODUCIBLE_CHAIN.md              reproducible implementation record
 ## Current status
 
 - v50 has been short-run tested near 30 FPS on `MHI2Q_CN_AUG22_P1404`;
-- it restores the proven `sh -c` host that starts the native server;
+- v51 preserves that path, fixes long-running FPS telemetry overflow, and
+  bounds runtime log usage; the revision awaits its next in-car verification;
+- it retains the proven `sh -c` host that starts the native server;
 - PID liveness checks remove the old false recovery at roughly 40 seconds;
 - the new `Cockpit_Mirror.jar` filename and first-START migration still require
   continued in-car validation;

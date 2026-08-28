@@ -22,7 +22,7 @@ RENDERPID="${STATE}/direct_upload_renderer.pid"
 CAPTUREPID="${STATE}/direct_upload_capture.pid"
 WATCHDOGPID="${STATE}/direct_upload_watchdog.pid"
 EXPECTED_HOOK="2128946334 16364"
-EXPECTED_UPLOAD="42877355 9092"
+EXPECTED_UPLOAD="266993779 9064"
 EXPECTED_RENDERER="1309065104 107890"
 EXPECTED_DISPLAY_SHIM="1535898152 4956"
 EXPECTED_EGL_DIAG="4142780645 8484"
@@ -32,7 +32,7 @@ HEARTBEAT_N=0
 
 write_status() {
     {
-        echo "version=direct-upload-v50"
+        echo "version=direct-upload-v51"
         echo "state=$1"
         echo "detail=$2"
         echo "source=screen-read-display-in-renderer-process"
@@ -100,7 +100,7 @@ sync
     >"${STATE}/direct_upload_watchdog.log" 2>&1 &
 echo $! > "$WATCHDOGPID"
 
-write_status "VALIDATING" "Checking v50 persistent 30-FPS draw-clock components"
+write_status "VALIDATING" "Checking v51 persistent 30-FPS draw-clock components"
 for SPEC in \
     "libcp_mirror.so:${EXPECTED_HOOK}" \
     "libdirect_upload.so:${EXPECTED_UPLOAD}" \
@@ -128,7 +128,7 @@ cd "$APP" || fail_test "Could not enter app directory"
 # GLES texture update.  Keep the proven v48 /bin/sh -c preload host: on P1404
 # this form starts libcp_mirror's tiny-RFB constructor, while launching a shell
 # script directly can leave the shell alive without starting the native server.
-# The v50 watchdog validates the recorded PID with kill -0 and therefore no
+# The v51 watchdog validates the recorded PID with kill -0 and therefore no
 # longer depends on P1404's truncated pidin command-line text.
 MIRROR_CLOCK_HOST=1 LD_PRELOAD="${APP}/libcp_mirror.so" \
     /bin/sh -c "while [ -f '${MARKER}' ]; do /bin/sleep 30; done" \
@@ -183,7 +183,7 @@ done
 grep -q '^state=ACTIVE' "$JAVA_STATE" 2>/dev/null || fail_test "Java controller did not reach ACTIVE"
 grep -q "nativeContext=76 source=58 fps=${FPS}" "$JAVA_STATE" 2>/dev/null || \
     fail_test "Java ACTIVE did not confirm context76/source58"
-write_status "ACTIVE" "v50 recommended persistent 30-FPS renderer-local full-MMI upload active until STOP"
+write_status "ACTIVE" "v51 recommended persistent 30-FPS renderer-local full-MMI upload active until STOP"
 
 N=0
 LAST_COUNT=$(grep -c '^direct upload measured fps_x1000 capture_ms frames ' "$UPLOADLOG" 2>/dev/null)

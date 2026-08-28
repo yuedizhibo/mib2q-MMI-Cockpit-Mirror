@@ -1,7 +1,7 @@
 MMI Cockpit Mirror runtime manifest
 ===================================
 
-Release: B3-OPT v50 standalone Toolbox integration
+Release: B3-OPT v51 standalone Toolbox integration
 Vehicle tested: 2020 Audi Q5L
 Firmware gate: MHI2Q_CN_AUG22_P1404
 Destination: context 76 / displayable 58
@@ -38,6 +38,8 @@ Runtime flow
    command line to decide whether a required process is alive.
 7. Any failed frame, EGL, Java, heartbeat, or FPS gate disarms the pipeline and
    restores Audi context 74. The mirror never auto-starts after reboot.
+8. FPS telemetry uses a resettable 10-second window. The watchdog caps each
+   active high-volume log at 2 MiB and keeps at most one `.previous` copy.
 
 RGI boundary
 ------------
@@ -56,7 +58,7 @@ POSIX cksum / size:
   Cockpit_Mirror.jar       140001591 112564
   config.txt               1592761995 398
   libcp_mirror.so          2128946334 16364
-  libdirect_upload.so      42877355 9092
+  libdirect_upload.so      266993779 9064
   libdisplayinit.so        1535898152 4956
   libegl_diag.so           4142780645 8484
   libport_waker.so         3375612677 2292
@@ -67,7 +69,7 @@ SHA-256:
   Cockpit_Mirror.jar       1DAEB0A42E0A1EF92031F7412ADDC9CB3A4527BAB312FA285B23DC1ECC49AB57
   config.txt               E11930A31129DA7C4EB080316130562DC9ADB48CD72FF0DC0B67DA7025713CF9
   libcp_mirror.so          4B3A5A2DDFD7118988B3FE9BDE90DF48CA700AA028D228515FAFD44EF6137C30
-  libdirect_upload.so      1E70CFB1F1968252BAFF3BEE2A994D7F646AA520FBE2ADBB0CCE13690F655201
+  libdirect_upload.so      598CE7B0C4F516E424BA10B1A7AB5387A7E7CAE0F790C7E50EF23FB37EAB70BB
   libdisplayinit.so        E7DB229C417709E41BFF62519951C7B721E342263C27E0CCD8A90E8A765395B6
   libegl_diag.so           B670A3B99254D64D64158B63DB2980343CEDF5FBCBAE24146D31B081B6B38C9E
   libport_waker.so         E4B221AE0A650DBC3DB61B66FB2C8D423D662307E307A84FA7EA97FE2B9327AF
@@ -104,6 +106,11 @@ Runtime output
 
 Log/CarPlayMirror/
 Backup/MHI2Q_CN_AUG22_P1404/MMI_Cockpit_Mirror/
+
+Runtime logs are truncated at each START. During a persistent run,
+`direct_upload.log`, `direct_upload_renderer.log`, and `mirror_hook.log` are
+checked once per minute; any file above 2 MiB is rotated to one `.previous`
+copy. Manual LOG RECORD snapshots are created only when requested.
 
 Do not remove the SD card while the mirror is active or while the controller
 installer is writing system files.

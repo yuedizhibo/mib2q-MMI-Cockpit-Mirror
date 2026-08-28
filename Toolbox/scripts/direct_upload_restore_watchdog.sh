@@ -11,6 +11,19 @@ PIDFILE="${STATE}/direct_upload_watchdog.pid"
 LAST_HEARTBEAT=""
 STALE_POLLS=0
 POLLS=0
+MAX_LOG_BYTES=2097152
+LOG_CAP_INTERVAL_POLLS=30
+
+cap_runtime_log() {
+    FILE="$1"
+    [ -f "$FILE" ] || return 0
+    SIZE=$(wc -c <"$FILE" 2>/dev/null)
+    case "$SIZE" in *[!0-9]*|'') return 0 ;; esac
+    [ "$SIZE" -le "$MAX_LOG_BYTES" ] && return 0
+    cp "$FILE" "${FILE}.previous" 2>/dev/null || :
+    : > "$FILE"
+    echo "log_rotated=${FILE##*/} previous_bytes=${SIZE}" >>"$LOG"
+}
 
 safe_kill_recorded() {
     FILE="$1"
@@ -49,7 +62,7 @@ fail_closed() {
     safe_kill_recorded "${STATE}/direct_upload_worker.pid"
     restore_stock
     {
-        echo "version=direct-upload-v50"
+        echo "version=direct-upload-v51"
         echo "state=WATCHDOG_RESTORED"
         echo "detail=Independent watchdog restored Audi map: ${REASON}"
         echo "requested_fps=${FPS}"
@@ -60,7 +73,7 @@ fail_closed() {
     exit 1
 }
 
-echo "version=direct-upload-watchdog-v50 fps=${FPS}" >"$LOG"
+echo "version=direct-upload-watchdog-v51 fps=${FPS}" >"$LOG"
 while [ -f "$MARKER" ]; do
     CURRENT_HEARTBEAT=$(cat "$HEARTBEAT" 2>/dev/null)
     if [ -n "$CURRENT_HEARTBEAT" ] && [ "$CURRENT_HEARTBEAT" != "$LAST_HEARTBEAT" ]; then
@@ -84,6 +97,12 @@ while [ -f "$MARKER" ]; do
             case "$PID_VALUE" in *[!0-9]*|'') fail_closed "invalid pid file: ${FILE}" ;; esac
             pid_is_alive "$FILE" || fail_closed "required process exited: ${ROLE} pid=${PID_VALUE}"
         done
+    fi
+
+    if [ "$POLLS" -gt 0 ] && [ $((POLLS % LOG_CAP_INTERVAL_POLLS)) -eq 0 ]; then
+        cap_runtime_log "${STATE}/direct_upload.log"
+        cap_runtime_log "${STATE}/direct_upload_renderer.log"
+        cap_runtime_log "${STATE}/mirror_hook.log"
     fi
 
     sleep 2

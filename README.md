@@ -5,7 +5,7 @@
 把 MIB2Q 中控当前输出的完整 MMI 画面实时镜像到 Audi Virtual Cockpit。
 
 本仓库以 [jilleb/mib2-toolbox](https://github.com/jilleb/mib2-toolbox) 为完整
-基础，直接加入了 Green Engineering Menu、B3-OPT v50 运行链路、故障恢复、
+基础，直接加入了 Green Engineering Menu、B3-OPT v51 运行链路、故障恢复、
 日志采集和可复现源码。它不是 CarPlay AltScreen，也不是仅转发导航箭头；它
 采集的是整个 MMI 画面，因此中控显示 CarPlay 时仪表显示 CarPlay，中控显示
 原生菜单时仪表也显示原生菜单。
@@ -107,6 +107,11 @@ Log/CarPlayMirror/Records/B3_<timestamp>_<pid>/
 - `java_mirror_state.txt`
 - `SUMMARY.txt`
 
+常驻日志不会无限增长：每次 START 会清空上一轮活跃日志；运行期间每分钟检查
+一次高频日志，单个文件超过 2 MiB 时只保留一份 `.previous` 后重新记录。因此
+每个受控日志最多约占 4 MiB。`LOG RECORD` 快照只在手动选择时创建，不会后台
+自动累积。
+
 ## 项目结构
 
 ```text
@@ -123,7 +128,8 @@ docs/B3_REPRODUCIBLE_CHAIN.md              完整可复现链路
 ## 当前状态
 
 - v50 已在 `MHI2Q_CN_AUG22_P1404` 上验证约 30 FPS 的短时运行；
-- v50 恢复了已验证能启动 native server 的 `sh -c` clock host；
+- v51 保留该实车链路，修复长时间 FPS 统计溢出并限制日志占用；等待下一次实车验证；
+- v51 保留已验证能启动 native server 的 `sh -c` clock host；
 - 看门狗已改为 PID 存活检测，消除了旧版约 40 秒误恢复；
 - `Cockpit_Mirror.jar` 新文件名和首次 START 迁移流程需要继续实车验证；
 - 数小时热稳定性和其他固件兼容性尚未声明完成。

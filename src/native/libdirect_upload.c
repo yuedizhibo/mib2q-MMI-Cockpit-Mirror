@@ -78,7 +78,8 @@ static int g_stride;
 static int g_state;
 static u32 g_frames;
 static u32 g_failures;
-static long g_stats_start;
+static u32 g_stats_start_us;
+static u32 g_stats_frames;
 static int g_gpu_bgra_swizzle;
 static int g_texture_ready;
 static int g_draw_pump_logged;
@@ -93,6 +94,7 @@ static int g_draw_pacing_configured;
 #define GL_TRIANGLE_FAN 0x0006
 #define FPS30_PATH_A "/net/mmx/fs/sda0/Toolbox/carplay_mirror_test/FPS30"
 #define FPS30_PATH_B "/net/mmx/fs/sda1/Toolbox/carplay_mirror_test/FPS30"
+#define STATS_LOG_INTERVAL_US 10000000U
 
 static void configure_draw_pacing(void) {
     if (g_draw_pacing_configured) return;
@@ -125,6 +127,14 @@ static long now_us(void) {
     struct timeval value;
     if (gettimeofday(&value, 0) != 0) return 0;
     return value.tv_sec * 1000000L + value.tv_usec;
+}
+
+/* A wrapping 32-bit monotonic-enough window avoids the 32-bit signed long
+ * overflow that made v50's cumulative fps_x1000 value turn negative. */
+static u32 now_us32(void) {
+    struct timeval value;
+    if (gettimeofday(&value, 0) != 0) return 0;
+    return (u32)value.tv_sec * 1000000U + (u32)value.tv_usec;
 }
 
 static u64 now_us64(void) {
@@ -209,6 +219,7 @@ static const void *capture_rgba(const void *fallback) {
     long started;
     long elapsed;
     int y;
+    u32 stats_now;
     if (init_capture() != 0) return fallback;
     read_display = (fn_read_display)dlsym(g_screen, "screen_read_display");
     if (!read_display) return fallback;
@@ -233,16 +244,25 @@ static const void *capture_rgba(const void *fallback) {
         }
     }
     elapsed = now_us() - started;
+    stats_now = now_us32();
     g_frames++;
     if (g_frames == 1) {
         log_line("direct upload first MMI frame", (int)(elapsed / 1000L), CAP_W, CAP_H);
-        g_stats_start = now_us();
-    } else if (g_frames % 20U == 0U) {
-        long span = now_us() - g_stats_start;
-        int fps_x1000 = span > 1000L ?
-            (int)(((long)(g_frames - 1U) * 1000000L) / (span / 1000L)) : 0;
-        log_line("direct upload measured fps_x1000 capture_ms frames", fps_x1000,
-                 (int)(elapsed / 1000L), (int)g_frames);
+        g_stats_start_us = stats_now;
+        g_stats_frames = 0;
+    } else {
+        u32 span_us;
+        g_stats_frames++;
+        span_us = stats_now - g_stats_start_us;
+        if (span_us >= STATS_LOG_INTERVAL_US) {
+            u32 span_ms = span_us / 1000U;
+            int fps_x1000 = span_ms > 0U ?
+                (int)((g_stats_frames * 1000000U) / span_ms) : 0;
+            log_line("direct upload measured fps_x1000 capture_ms frames", fps_x1000,
+                     (int)(elapsed / 1000L), (int)g_frames);
+            g_stats_start_us = stats_now;
+            g_stats_frames = 0;
+        }
     }
     return g_gpu_bgra_swizzle ? g_pixels : g_rgba;
 }

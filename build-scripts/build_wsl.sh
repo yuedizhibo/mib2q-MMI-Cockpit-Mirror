@@ -10,8 +10,7 @@ rm -f "$BUILD/libcp_mirror.so" "$BUILD/libcp_mirror.o" \
       "$BUILD/libdisplayinit.so" "$BUILD/libdisplayinit_p1404.o" \
       "$BUILD/libegl_diag.so" "$BUILD/libegl_diag.o" \
       "$BUILD/libdirect_upload.so" "$BUILD/libdirect_upload.o" \
-      "$BUILD/libport_waker.so" "$BUILD/libport_waker.o" \
-      "$BUILD/libdirect_display_share.so" "$BUILD/libdirect_display_share.o"
+      "$BUILD/libport_waker.so" "$BUILD/libport_waker.o"
 
 for lib in libc.so.3 libsocket.so.3 libscreen.so.1 libz.so.2; do
     clang --target=armv7-linux-gnueabi -fuse-ld=lld -nostdlib -shared \
@@ -84,19 +83,6 @@ clang --target=armv7-linux-gnueabi -fuse-ld=lld -nostdlib -shared \
 
 printf '\002\000\000\005' | dd of="$BUILD/libport_waker.so" bs=1 seek=36 conv=notrunc status=none
 
-clang --target=armv7-linux-gnueabi -march=armv7-a -marm -mfloat-abi=softfp \
-    -fPIC -O2 -ffreestanding -fno-stack-protector -fno-builtin -nostdinc \
-    -Wall -Wextra -Werror -c "$ROOT/src/native/libdirect_display_share.c" \
-    -o "$BUILD/libdirect_display_share.o"
-
-clang --target=armv7-linux-gnueabi -fuse-ld=lld -nostdlib -shared \
-    -Wl,--build-id=none,-z,norelro,-z,max-page-size=4096,--hash-style=sysv \
-    -Wl,-soname,libdirect_display_share.so -Wl,--no-as-needed -L"$STUBS" \
-    -Wl,-l:libc.so.3 -Wl,--allow-shlib-undefined \
-    "$BUILD/libdirect_display_share.o" -o "$BUILD/libdirect_display_share.so"
-
-printf '\002\000\000\005' | dd of="$BUILD/libdirect_display_share.so" bs=1 seek=36 conv=notrunc status=none
-
 sha256sum "$BUILD/libcp_mirror.so"
 file "$BUILD/libcp_mirror.so"
 readelf -h -d -s "$BUILD/libcp_mirror.so"
@@ -112,6 +98,3 @@ readelf -h -d -s "$BUILD/libdirect_upload.so"
 sha256sum "$BUILD/libport_waker.so"
 file "$BUILD/libport_waker.so"
 readelf -h -d -s "$BUILD/libport_waker.so"
-sha256sum "$BUILD/libdirect_display_share.so"
-file "$BUILD/libdirect_display_share.so"
-readelf -h -d -s "$BUILD/libdirect_display_share.so"

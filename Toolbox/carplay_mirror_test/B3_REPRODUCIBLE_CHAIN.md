@@ -1,4 +1,4 @@
-# B3-OPT 可复现链路（v50）
+# B3-OPT 可复现链路（v51）
 
 本文记录 2020 款 Audi Q5L、`MHI2Q_CN_AUG22_P1404` 上已经跑通的
 `MMI Cockpit Mirror → START` 完整链路。目标是让后来者只依赖本仓库、
@@ -31,7 +31,7 @@ MMI 物理输出 1024×480 @ 59 Hz
 - `screen_read_display()` 通常 `2–7 ms`，观测最大值 `9 ms`。
 - 颜色、80% 缩放、水平居中和向上偏移已经实车确认。
 - VIEW/layout 切回原生 context 后，Java 控制器会重新进入 context 76。
-- v48 修复了旧版常驻宿主仍固定 `sleep 420` 的问题。v50 保留已验证能启动
+- v48 修复了旧版常驻宿主仍固定 `sleep 420` 的问题。v51 保留已验证能启动
   native server 的 marker 跟随式 `/bin/sh -c` 宿主，并让 watchdog 只用记录
   PID 的 `kill -0` 检查存活，避开 P1404 `pidin` 截断造成的约 40 秒误恢复。
 - 仍需继续验证数小时热稳定性；短时结果不等于完成长期寿命测试。
@@ -122,12 +122,12 @@ landscapeVertices=-0.568889 0.819188 0.0  0.568889 0.819188 0.0  0.568889 -0.597
 
 ## 4. 锁定构件与校验值
 
-SD 运行目录是 `Toolbox/carplay_mirror_test/`。当前 v50 必须保留以下构件：
+SD 运行目录是 `Toolbox/carplay_mirror_test/`。当前 v51 必须保留以下构件：
 
 | 文件 | POSIX `cksum / size` | SHA-256 |
 |---|---|---|
 | `libcp_mirror.so` | `2128946334 16364` | `4B3A5A2DDFD7118988B3FE9BDE90DF48CA700AA028D228515FAFD44EF6137C30` |
-| `libdirect_upload.so` | `42877355 9092` | `1E70CFB1F1968252BAFF3BEE2A994D7F646AA520FBE2ADBB0CCE13690F655201` |
+| `libdirect_upload.so` | `266993779 9064` | `598CE7B0C4F516E424BA10B1A7AB5387A7E7CAE0F790C7E50EF23FB37EAB70BB` |
 | `libport_waker.so` | `3375612677 2292` | `E4B221AE0A650DBC3DB61B66FB2C8D423D662307E307A84FA7EA97FE2B9327AF` |
 | `opengl-render-qnx-audi` | `1309065104 107890` | `2DAEF16EC470779AD00F30079E1865677C4F928EA8E172626409CD0D98378C4C` |
 | `libdisplayinit.so` | `1535898152 4956` | `E7DB229C417709E41BFF62519951C7B721E342263C27E0CCD8A90E8A765395B6` |
@@ -395,6 +395,12 @@ Log/CarPlayMirror/java_mirror_state.txt
 显示当前状态和最近十条 FPS 统计。快照至少包含当时存在的核心日志、marker、项目
 PID、锁定构件 `cksum` 以及 `dmdt gs/gd`。正常运行时应至少出现：
 
+v51 每 10 秒输出一次窗口化 FPS 统计，避免 P1404 的 32 位累计乘法溢出，同时
+保留 worker 的 12 秒失帧检测能力。每次
+START 会截断上一轮活跃日志；watchdog 每分钟检查高频日志，单个文件超过 2 MiB
+时覆盖一份 `.previous` 后截断当前文件。受控日志因此不会无限增长；手动
+`LOG RECORD` 快照只在用户选择该菜单项时创建。
+
 ```text
 state=ACTIVE
 requested_fps=30
@@ -444,9 +450,10 @@ direct upload measured fps_x1000 capture_ms frames 29xxx ...
 | 红蓝互换 | `GPU BGRA swizzle enabled` | 不要恢复 CPU 色彩路径；确认 shader replacement 生效 |
 | 画面在左边/过大 | `config.txt` 和 displayinit | 恢复本文固定 1440×542 + 80% vertices |
 | VIEW 后回地图 | Java `SUSPENDED/ACTIVE` 变化 | 若未在数秒内重入 76，STOP 并检查 controller 日志 |
-| 约40秒后自动恢复地图 | watchdog 与 clock host | 旧 v48 用被 `pidin` 截断的参数验身份；覆盖 v50 脚本并 Update Toolbox |
-| 宿主存活但没有首帧 | clock host 启动形式 | v49 直接执行 shell 脚本未启动 native server；覆盖 v50 脚本并 Update Toolbox |
-| 约7分钟后自己退出 | clock host 版本 | 旧 v47 固定 420 秒宿主；覆盖 v50 脚本并 Update Toolbox |
+| FPS 统计变成负数 | `direct_upload.log` | v50 的 32 位累计计数溢出；覆盖 v51 构件，不代表画面链路曾崩溃 |
+| 约40秒后自动恢复地图 | watchdog 与 clock host | 旧 v48 用被 `pidin` 截断的参数验身份；覆盖 v51 脚本并 Update Toolbox |
+| 宿主存活但没有首帧 | clock host 启动形式 | v49 直接执行 shell 脚本未启动 native server；覆盖 v51 脚本并 Update Toolbox |
+| 约7分钟后自己退出 | clock host 版本 | 旧 v47 固定 420 秒宿主；覆盖 v51 脚本并 Update Toolbox |
 
 ## 15. 不要重新尝试的旧 B3 分支
 
