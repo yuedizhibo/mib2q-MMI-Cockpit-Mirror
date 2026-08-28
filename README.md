@@ -10,6 +10,10 @@
 采集的是整个 MMI 画面，因此中控显示 CarPlay 时仪表显示 CarPlay，中控显示
 原生菜单时仪表也显示原生菜单。
 
+## 实车效果
+
+![MMI 画面同步显示在中控与 Audi Virtual Cockpit](docs/images/mmi-cockpit-mirror-demo.png)
+
 > [!CAUTION]
 > 这是针对特定车机固件的实验性修改，会写入 MMI 系统分区。操作错误可能造成
 > 黑屏、服务故障或需要恢复车机。只在车辆静止、供电稳定且已经保存备份时使用。

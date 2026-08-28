@@ -12,6 +12,10 @@ CarPlay AltScreen and it is not a turn-by-turn icon forwarder. It captures the
 whole MMI output: when the center screen shows CarPlay the cockpit shows
 CarPlay, and when it shows an MMI page the cockpit shows that MMI page.
 
+## In-vehicle result
+
+![The MMI output mirrored on the center display and Audi Virtual Cockpit](docs/images/mmi-cockpit-mirror-demo.png)
+
 > [!CAUTION]
 > This is an experimental, firmware-specific modification that writes to the
 > MMI system partition. A mistake can cause a black screen, service faults, or
