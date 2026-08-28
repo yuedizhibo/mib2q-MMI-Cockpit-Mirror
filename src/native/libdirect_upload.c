@@ -255,9 +255,12 @@ static const void *capture_rgba(const void *fallback) {
         g_stats_frames++;
         span_us = stats_now - g_stats_start_us;
         if (span_us >= STATS_LOG_INTERVAL_US) {
-            u32 span_ms = span_us / 1000U;
-            int fps_x1000 = span_ms > 0U ?
-                (int)((g_stats_frames * 1000000U) / span_ms) : 0;
+            int span_ms = (int)(span_us / 1000U);
+            /* Keep the variable division signed. The verified P1404 runtime
+             * exports __aeabi_idiv but does not resolve __aeabi_uidiv for an
+             * LD_PRELOAD library, which makes the hook silently unavailable. */
+            int fps_x1000 = span_ms > 0 ?
+                ((int)g_stats_frames * 1000000) / span_ms : 0;
             log_line("direct upload measured fps_x1000 capture_ms frames", fps_x1000,
                      (int)(elapsed / 1000L), (int)g_frames);
             g_stats_start_us = stats_now;

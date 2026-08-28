@@ -127,7 +127,7 @@ SD 运行目录是 `Toolbox/carplay_mirror_test/`。当前 v51 必须保留以�
 | 文件 | POSIX `cksum / size` | SHA-256 |
 |---|---|---|
 | `libcp_mirror.so` | `2128946334 16364` | `4B3A5A2DDFD7118988B3FE9BDE90DF48CA700AA028D228515FAFD44EF6137C30` |
-| `libdirect_upload.so` | `266993779 9064` | `598CE7B0C4F516E424BA10B1A7AB5387A7E7CAE0F790C7E50EF23FB37EAB70BB` |
+| `libdirect_upload.so` | `2201151100 9064` | `50B63F23119A40DF93365461950B97E46E0318CB52138EA739A2A729BAC3135C` |
 | `libport_waker.so` | `3375612677 2292` | `E4B221AE0A650DBC3DB61B66FB2C8D423D662307E307A84FA7EA97FE2B9327AF` |
 | `opengl-render-qnx-audi` | `1309065104 107890` | `2DAEF16EC470779AD00F30079E1865677C4F928EA8E172626409CD0D98378C4C` |
 | `libdisplayinit.so` | `1535898152 4956` | `E7DB229C417709E41BFF62519951C7B721E342263C27E0CCD8A90E8A765395B6` |
@@ -400,6 +400,10 @@ v51 每 10 秒输出一次窗口化 FPS 统计，避免 P1404 的 32 位累计�
 START 会截断上一轮活跃日志；watchdog 每分钟检查高频日志，单个文件超过 2 MiB
 时覆盖一份 `.previous` 后截断当前文件。受控日志因此不会无限增长；手动
 `LOG RECORD` 快照只在用户选择该菜单项时创建。
+
+P1404 的预加载环境必须保持变量除法依赖为 `__aeabi_idiv`。不要把 FPS 公式改成
+无符号变量除法；它会引入无法解析的 `__aeabi_uidiv`，表现为 renderer/EGL 正常
+运行，但 `libdirect_upload` 没有进入纹理挂接点。
 
 ```text
 state=ACTIVE
