@@ -1,0 +1,109 @@
+MMI Cockpit Mirror runtime manifest
+===================================
+
+Release: B3-OPT v50 standalone Toolbox integration
+Vehicle tested: 2020 Audi Q5L
+Firmware gate: MHI2Q_CN_AUG22_P1404
+Destination: context 76 / displayable 58
+Input: renderer-local full MMI texture
+Target rate: 30 FPS
+Lifetime: until STOP, full MMI reboot, or watchdog fault recovery
+
+Public Green Menu
+-----------------
+
+Toolbox/GEM/mqb-mmiCockpitMirror.esd
+
+  START      Persistent 30-FPS MMI cockpit mirror. On first use it installs
+             or migrates Cockpit_Mirror.jar and requests a complete reboot.
+  STOP       Removes all runtime markers and restores Audi context 74.
+  LOG RECORD Saves a self-contained B3 status/log snapshot to the SD card.
+
+Runtime flow
+------------
+
+1. start_direct_upload_test.sh validates the exact P1404 firmware and heals
+   stale marker/PID files left by a full MMI reboot.
+2. ensure_cockpit_mirror_controller.sh verifies Cockpit_Mirror.jar. If a legacy
+   carplay_hook.jar exists, it is backed up to the SD card before migration;
+   installation is transactional and requests a full reboot.
+3. direct_upload_test_worker.sh validates all locked native artifacts.
+4. The proven v48-style /bin/sh -c preload host starts libcp_mirror's tiny-RFB
+   pacing server. The actual 1024x480 MMI texture is read inside the renderer
+   by libdirect_upload immediately before the GLES texture update.
+5. After the first real MMI frame and EGL swap, the Java controller activates
+   cockpit context 76 with source/displayable 58.
+6. direct_upload_restore_watchdog.sh checks recorded worker, renderer, clock
+   host, and watchdog PIDs with kill -0. It never parses the truncated P1404
+   command line to decide whether a required process is alive.
+7. Any failed frame, EGL, Java, heartbeat, or FPS gate disarms the pipeline and
+   restores Audi context 74. The mirror never auto-starts after reboot.
+
+RGI boundary
+------------
+
+The B3 runtime captures the complete MMI output and does not consume RGI route
+messages, start maneuver_render, or require a navigation application. The Java
+controller JAR retains modified/derived classes from the public
+luka-dev/mib2q-carplay-rgi plugin lineage. See THIRD_PARTY_NOTICES.md at the
+repository root; the JAR must not be assumed to be MIT-licensed.
+
+Locked artifact checksums
+-------------------------
+
+POSIX cksum / size:
+
+  Cockpit_Mirror.jar       140001591 112564
+  config.txt               1592761995 398
+  libcp_mirror.so          2128946334 16364
+  libdirect_upload.so      42877355 9092
+  libdisplayinit.so        1535898152 4956
+  libegl_diag.so           4142780645 8484
+  libport_waker.so         3375612677 2292
+  opengl-render-qnx-audi   1309065104 107890
+
+SHA-256:
+
+  Cockpit_Mirror.jar       1DAEB0A42E0A1EF92031F7412ADDC9CB3A4527BAB312FA285B23DC1ECC49AB57
+  config.txt               E11930A31129DA7C4EB080316130562DC9ADB48CD72FF0DC0B67DA7025713CF9
+  libcp_mirror.so          4B3A5A2DDFD7118988B3FE9BDE90DF48CA700AA028D228515FAFD44EF6137C30
+  libdirect_upload.so      1E70CFB1F1968252BAFF3BEE2A994D7F646AA520FBE2ADBB0CCE13690F655201
+  libdisplayinit.so        E7DB229C417709E41BFF62519951C7B721E342263C27E0CCD8A90E8A765395B6
+  libegl_diag.so           B670A3B99254D64D64158B63DB2980343CEDF5FBCBAE24146D31B081B6B38C9E
+  libport_waker.so         E4B221AE0A650DBC3DB61B66FB2C8D423D662307E307A84FA7EA97FE2B9327AF
+  opengl-render-qnx-audi   2DAEF16EC470779AD00F30079E1865677C4F928EA8E172626409CD0D98378C4C
+
+Required SD layout
+------------------
+
+Toolbox/
+  GEM/mqb-mmiCockpitMirror.esd
+  apps/mmi-cockpit-mirror/Cockpit_Mirror.jar
+  carplay_mirror_test/
+    Cockpit_Mirror.jar
+    config.txt
+    libcp_mirror.so
+    libdirect_upload.so
+    libdisplayinit.so
+    libegl_diag.so
+    libport_waker.so
+    opengl-render-qnx-audi
+    B3_REPRODUCIBLE_CHAIN.md
+    MANIFEST.txt
+  scripts/
+    direct_upload_restore_watchdog.sh
+    direct_upload_test_worker.sh
+    ensure_cockpit_mirror_controller.sh
+    record_b3_logs.sh
+    start_direct_upload_test.sh
+    stop_carplay_mirror_test.sh
+    stop_direct_upload_test.sh
+
+Runtime output
+--------------
+
+Log/CarPlayMirror/
+Backup/MHI2Q_CN_AUG22_P1404/MMI_Cockpit_Mirror/
+
+Do not remove the SD card while the mirror is active or while the controller
+installer is writing system files.

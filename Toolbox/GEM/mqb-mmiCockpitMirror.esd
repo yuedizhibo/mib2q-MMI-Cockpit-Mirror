@@ -1,0 +1,16 @@
+###########################################################################################
+# MMI -> Virtual Cockpit full-screen mirror for MHI2Q_CN_AUG22_P1404
+###########################################################################################
+screen "MMI Cockpit Mirror" Customization
+
+script
+   value   sys 1 0x0100 "/eso/hmi/engdefs/scripts/mqb/start_direct_upload_test.sh"
+   label   "START - 30FPS persistent MMI cockpit mirror"
+
+script
+   value   sys 1 0x0100 "/eso/hmi/engdefs/scripts/mqb/stop_direct_upload_test.sh"
+   label   "STOP - disable mirror and restore Audi map"
+
+script
+   value   sys 1 0x0100 "/eso/hmi/engdefs/scripts/mqb/record_b3_logs.sh"
+   label   "LOG RECORD - save current B3 status and logs"

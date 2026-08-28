@@ -1,166 +1,144 @@
-# MIB2 High toolbox
-The ultimate MIB2-HIGH toolbox for all your MIB2 High customization needs.
+# MIB2Q MMI Cockpit Mirror
 
-Note: this screen has the potential to ruin your MIB2 HIGH unit. The developers are not responsible for any troubles to anyone or anything caused by this toolbox.
-It's never our intention to harm any person, car or brand. Use the tools wisely, don't be a douche.
+[English](README_EN.md) | 简体中文
 
-Note2: This is **not** a universal Jailbreak-like solution for all your needs and firmware versions.
+把 MIB2Q 中控当前输出的完整 MMI 画面实时镜像到 Audi Virtual Cockpit。
 
-Note3: If you're a business that tries to make a profit off of this:  Don't be an asshole, don't charge money for this. This project is done in our free time, out of love for the community. I've risked bricking my own hardware while testing, and invested a lot of time in the research. Instead of making money, why not support this project with your knowledge or a [small donation](https://paypal.me/chillout1) or become a [Patreon](https://patreon.com/jille). 
+本仓库以 [jilleb/mib2-toolbox](https://github.com/jilleb/mib2-toolbox) 为完整
+基础，直接加入了 Green Engineering Menu、B3-OPT v50 运行链路、故障恢复、
+日志采集和可复现源码。它不是 CarPlay AltScreen，也不是仅转发导航箭头；它
+采集的是整个 MMI 画面，因此中控显示 CarPlay 时仪表显示 CarPlay，中控显示
+原生菜单时仪表也显示原生菜单。
 
-# Requirements
-- Read the entire readme
-- At least 1 healthy set of brains
-- An MIB2 HIGH or MIB2.5 HIGH infotainment unit. It will **not** work on MIB1 or MIB2 Standard units. Discover Media / Composition Media is not MIB2 HIGH! For MIB2 Standard see the [olli991/mib-std2-pq-zr-toolbox](https://github.com/olli991/mib-std2-pq-zr-toolbox) project.
-- 1 empty, **FAT32 formatted** SD-card, with enough space. Everything bigger than 1GB is fine
-- Some place to save your backups
+> [!CAUTION]
+> 这是针对特定车机固件的实验性修改，会写入 MMI 系统分区。操作错误可能造成
+> 黑屏、服务故障或需要恢复车机。只在车辆静止、供电稳定且已经保存备份时使用。
+> 作者和参考项目作者均不对车辆、车机、数据或保修损失承担责任。
 
-## Optional requirements ##
-- Python 3, if you want to extract/compress graphics containers (canim/mcf)
-- A text-editor, if you want to make your own green menu files or scripts
-- Picture editing software, if you want to customize graphics files
+## 当前支持范围
 
-# How to install
-- If you've installed a previous version (before V4.0) of the toolbox: clean your SD-card before trying to install.
-- Download all files from the repository. This can be either as a git clone or "Download zip" from github then extract the zip.
-- Put all files and folders on an empty SD-card, preferable >1GB.
-- Put the SD-card in one of the slots of your MIB2-unit. 
-- Make sure there's only 1 SD-card in your unit, otherwise the scripts don't know where to look.
-- Hold the MENU button on your MIB2 until the service screen appears.
-- Select the "Software updates/versions" menu, then hit the "Update" button in top right corner.
-- Select the SD-card and select MQB Coding MIB2 Toolbox.
-- Let the unit run the entire software update. It will reboot several times before showing a screen listing a lot of modules as N/A. The Toolbox line should be Y. You can then hit the back button in the top right corner. 
-- When it's done, it will ask you to connect a computer and clear the error codes. This is not needed, you can hit the "Cancel" button..
-- The unit will restart one final time and you're back at the main car menu. Installation is now done.
-- Hold the MENU button, and go to TESTMODE. On older versions you can go to the developer menu by holding the MENU button for about 10 seconds.
-- Go to the Green Developer Menu
-- There will be an additional menu called "mqbcoding". When you see this, the installation was succesful.
-- Go to mqbcoding, and you will see the following:
+- 实车：2020 Audi Q5L
+- 固件：`MHI2Q_CN_AUG22_P1404`
+- 目标：Audi Virtual Cockpit `context 76 / displayable 58`
+- 输入：MMI renderer 内部 1024×480 画面
+- 输出：约 30 FPS，80% 缩放、水平居中并向上校正
+- 生命周期：持续运行到 STOP、MMI 完整重启或 watchdog 故障恢复
 
-![The MQB Coding toolbox menu](https://i.imgur.com/wGUZ4xw.png)
+脚本会拒绝其他固件。不要通过删除固件检查来尝试未知车型或版本。
 
-- You're now done.
-- Enjoy!
+## 与 CarPlay RGI 的关系
 
-# How to do a manual installation
-- Put the mib2-toolbox on an SD-card and insert it into the MIB-unit SD1 slot.
-- Make a connection to the debug console of the unit (either via D-Link Dub-E100 or ASIX AX88179 on the USB port, or serial interface on the back of the unit)
-- Log in
-- Mount the SD card:
-  * `mount -uw /net/mmx/fs/sda0` 
-- Run the finalScript:  
-  * `sh /net/mmx/fs/sda0/Toolbox/final/finalScripts.sh`
+当前 B3 画面链路已经不消费 RGI 导航消息，也不启动 `maneuver_render`：
 
-- Hold the MENU button, and go to TESTMODE. On older versions you can go to the developer menu by holding the MENU button for about 10 seconds.
-- Go to the Green Developer Menu
-- There will be an additional menu called "mqbcoding". When you see this, the installation was succesful.
-- You're now done.
-- Enjoy!
+- 不要求导航应用正在运行；
+- 不依赖路线、转向或 BAP RGI 数据；
+- 捕获整个 MMI 输出，而不是只捕获 CarPlay 导航画面；
+- native 采集时钟由 SD 卡上的 `libcp_mirror.so` 显式启动。
 
-# Green menu screen overview:
+仪表通道的 Java 控制器仍派生自
+[luka-dev/mib2q-carplay-rgi](https://github.com/luka-dev/mib2q-carplay-rgi) 的
+JAR/插件结构。公开构件已改名为 `Cockpit_Mirror.jar`，镜像模式会禁用 RGI
+消息、BAP 接管和 maneuver renderer，但这次改名不等于相关历史代码被重新
+授权或完全重写。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-```
-MQBCoding Main
-|
-+---Customization                       # Customization features
-|   +---Adaptations                     # Adaptation channels
-|       +---CarDeviceBUSAssignment
-|       +---CarFunctionsList_BAP
-|       +---CarFunctionsList_CAN
-|       +---CarMenuOperation
-|       +---HMI_FunctionBlockingTable
-|       +---RCCAdaptions
-|       +---VariantInfo
-|       +---VehicleConfiguration
-|       +---WLAN
-|   +---Advanced                        # Import shadow file, FECs pf.conf and such
-|   +---AndroidAuto                     # Android Auto custom apps patch
-|   +---Coding                          # Long coding editor
-|   +---Display                         # Displaymanager and other related features
-|   +---GreenMenu                       # Import new GreenMenu screens and scripts
-|   +---Language                        # Replacing language data
-|   +---Navigation                      # Navigation tweaks, mapstyles switching
-|   +---Privacy                         # Privacy features
-|   +---Skin                            # Skin graphics import
-|   +---Sounds                          # Sounds import (experimental)
-|   +---Startup                         # Startup graphics import
-|   +---Updates                         # Custom SWDL modes and emergency
-|   +---Various                         # Various tweaks
-|
-+---Disclaimer                          # Some wise words
-|
-+---Dump                                # Dump various data to SD-card
-|
-+---History                             # Version history of the Toolbox
-|
-+---MIB_Information                     # Information about the unit
-|   +---Password                        # Password finder
-|
-+---Uninstall                           # Uninstalls and or cleans up the MIB Toolbox
+## 菜单
+
+安装后进入：
+
+```text
+MQB Coding Toolbox
+└─ Customization
+   └─ MMI Cockpit Mirror
+      ├─ START - 30FPS persistent MMI cockpit mirror
+      ├─ STOP - disable mirror and restore Audi map
+      └─ LOG RECORD - save current B3 status and logs
 ```
 
-# How to use the new screens
-Most screens have a description inside, or show information when running a script. It's always wise to have an SD-card in slot 1.
+## 安装
 
-## dump
-Here you can dump various things which you need to customise you unit. Make sure a SD-card is inserted.
+1. 下载或克隆本仓库，把仓库根目录的全部文件放到健康的 FAT32 SD 卡根目录。
+2. 按 [MIB2 Toolbox 原始安装说明](https://github.com/jilleb/mib2-toolbox#how-to-install)
+   执行软件更新，确保 Toolbox 完整安装。
+3. 插入 SD 卡并进入上面的 `MMI Cockpit Mirror` 菜单。
+4. 第一次选择 `START` 时，脚本会检查 `Cockpit_Mirror.jar`：
+   - 未安装时，先备份并安装控制器；
+   - 检测到旧的 `carplay_hook.jar` 时，先备份到 SD，再迁移为新文件名；
+   - 此次只完成安装，屏幕会要求完整重启 MMI。
+5. 等待写入完成后完整重启 MMI。重新进入菜单，再次选择 `START` 才会启动镜像。
+6. 镜像期间保持 SD 卡插入。需要退出时选择 `STOP`。
 
-## customization
-### androidauto
-This screen has 2 buttons:
-- Patch Android Auto to enable custom third party apps. No root is needed on your phone.
-- Recover the original gal.json file in case you didn't like the patch or something is not working right.
+控制器备份和安装日志保存在：
 
-### skin
-This screen lets you install new images.mcf for each of the 6 skin-folders, from the SkinFiles folder on your SD-card. Use the dump files as a guideline. Don't install any files that are meant for other firmwares because it **will** mess up your graphics and functionalities of your infotainment unit.
-This screen will also let you recover the skins from backup.
+```text
+Backup/MHI2Q_CN_AUG22_P1404/MMI_Cockpit_Mirror/
+```
 
-## greenmenu
-This screen will let you import new .esd files from the GreenMenu folder on your SD-card.
+## 安全恢复
 
-# How to use the tools
-In the Tools folder you will find a couple of tools:
-- extract-canim.py
+- worker、renderer、clock host 和 watchdog 都记录独立 PID；
+- watchdog 使用 `kill -0` 检查 PID，不依赖 P1404 会截断的进程命令行；
+- 首帧、EGL、Java context 或帧计数任一门控失败都会先撤销镜像标记；
+- STOP 或故障会恢复 Audi `context 74`；
+- 镜像不会在 MMI 重启后自动启动。
 
-These are Python-scripts to extract startup screen files (.canim files) in 2 formats. If one of the scripts doesn't extract your canim, try the other one. Both work in the same way: extract_canim.py <filename> <outdir>, for instance: 
+如果 MMI 无响应，先使用车辆已验证的完整 MMI 强制重启方式。不要在写入系统
+文件时断电或拔卡。
 
-```extract_canim.py test.canim .\testfiles\```
+## 日志
 
-- extract-mcf.py
- 
-This a python script to extract skinfile containers (mcf) and it works similar to the canim-extract: extract_mcf.py <filename> <outdir>, for instance:
- 
- ```extract_mcf.py images.mcf .\extracted\```
- 
- 
-- compress-canim.py
+选择 `LOG RECORD` 后，快照保存在：
 
-This is the script to compress the startup-screens. Make sure you use the same compress-method you used when extracting. Usage: compress-canim.py <original-file> <new-file> <imagesdir>, for instance:
+```text
+Log/CarPlayMirror/Records/B3_<timestamp>_<pid>/
+```
 
-```compress-canim.py test.canim modified.canim .\testfiles\```
+主要文件：
 
-- compress-mcf.py
-This is the script to compress the MCF-container. Usage: compress-mif.py <original-file> <new-file> <imagesdir>, for instance:
-  
-```compress-mcf.py images.mcf images2.mcf .\extracted\```
+- `direct_upload_status.txt`
+- `direct_upload.log`
+- `direct_upload_renderer.log`
+- `direct_upload_capture_host.log`
+- `direct_upload_watchdog.log`
+- `direct_upload_worker.log`
+- `java_mirror_state.txt`
+- `SUMMARY.txt`
 
-- extract-cff.py
-This script can extract images.cff files, container files for navigation icons and materials. Usage: extract-cff.py <output dir>, for instance:
-  
-```extract-cff.py images.cff c:\extracted\```
+## 项目结构
 
+```text
+Toolbox/GEM/mqb-mmiCockpitMirror.esd       Green Menu 子菜单
+Toolbox/scripts/                           START / STOP / watchdog / 日志脚本
+Toolbox/carplay_mirror_test/               QNX 运行构件和固定配置
+Toolbox/apps/mmi-cockpit-mirror/           Cockpit_Mirror.jar
+src/native/                                native 采集与 renderer 注入源码
+src/java/                                  仪表控制器及兼容源码
+build-scripts/                             构建与 renderer 修补脚本
+docs/B3_REPRODUCIBLE_CHAIN.md              完整可复现链路
+```
 
-## F.A.Q.
-If you run into any issues, consult the [F.A.Q.](https://github.com/jilleb/mib2-toolbox/blob/master/FAQ.md).
+## 当前状态
 
-## Supported firmware versions
-This toolbox probably doesn't work on all available firmware versions but the current SD-card installtion proves to be mostly compatible with most firmwares.
+- v50 已在 `MHI2Q_CN_AUG22_P1404` 上验证约 30 FPS 的短时运行；
+- v50 恢复了已验证能启动 native server 的 `sh -c` clock host；
+- 看门狗已改为 PID 存活检测，消除了旧版约 40 秒误恢复；
+- `Cockpit_Mirror.jar` 新文件名和首次 START 迁移流程需要继续实车验证；
+- 数小时热稳定性和其他固件兼容性尚未声明完成。
 
+## 参考与致谢
 
-# Disclaimer:
-**Warning** These screens have the potential to break your unit and void your warranty. Be careful. We are not responsible for any troubles to you, your car or software. MQB Coding is always looking for cool hacks and retrofits to increase the potential of the MQB platform. It's never our intention to harm any person, car or brand.
+- [jilleb/mib2-toolbox](https://github.com/jilleb/mib2-toolbox)：完整 Toolbox、
+  SD 部署结构、软件更新流程和 Green Menu 框架。
+- [luka-dev/mib2q-carplay-rgi](https://github.com/luka-dev/mib2q-carplay-rgi)：
+  MHI2Q CarPlay/RGI 研究、Java 插件结构、QNX hook 与仪表渲染参考。
+- [Lanye-z/mib2-toolbox-carplay-rgi](https://github.com/Lanye-z/mib2-toolbox-carplay-rgi)：
+  Toolbox 与 RGI 的早期整合和部署参考。
 
-## Support this project
+感谢上述作者和社区公开的研究。本项目的核心增量是 renderer-local 全 MMI
+纹理读取、displayable 58 输出、持久化 30 FPS 控制、VIEW 恢复、PID watchdog
+以及完整的实车日志/回滚流程。
 
-You're always welcome to support this project with your knowledge, ideas or a [small donation](https://paypal.me/chillout1) to my Paypal or [Patreon](https://patreon.com/jille). 
+## 许可证
 
+原始 MIB2 Toolbox 保留其 [MIT License](LICENSE)。本项目新增的原创脚本和
+源码按同一 MIT 条款提供；第三方派生文件、逆向材料和二进制不因此自动获得
+MIT 授权，其权利和限制见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
