@@ -15,7 +15,7 @@ case "$FPS" in
     30) ;;
     *) echo "Unsupported B3-OPT FPS: $FPS"; exit 1 ;;
 esac
-echo "===== MMI Cockpit Mirror v51: persistent 30-FPS renderer-local upload ====="
+echo "===== MMI Cockpit Mirror v52: persistent 30-FPS renderer-local upload ====="
 [ "$VERSION" = "MHI2Q_CN_AUG22_P1404" ] || { echo "Wrong firmware: $VERSION"; exit 1; }
 [ ! -f "${APP}/ARMED" ] || [ -f "${APP}/DIRECT_UPLOAD_TEST" ] || \
     { echo "B5 is active. Run B5-OFF first."; exit 1; }

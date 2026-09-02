@@ -62,7 +62,7 @@ fail_closed() {
     safe_kill_recorded "${STATE}/direct_upload_worker.pid"
     restore_stock
     {
-        echo "version=direct-upload-v51"
+        echo "version=direct-upload-v52"
         echo "state=WATCHDOG_RESTORED"
         echo "detail=Independent watchdog restored Audi map: ${REASON}"
         echo "requested_fps=${FPS}"
@@ -73,7 +73,7 @@ fail_closed() {
     exit 1
 }
 
-echo "version=direct-upload-watchdog-v51 fps=${FPS}" >"$LOG"
+echo "version=direct-upload-watchdog-v52 fps=${FPS}" >"$LOG"
 while [ -f "$MARKER" ]; do
     CURRENT_HEARTBEAT=$(cat "$HEARTBEAT" 2>/dev/null)
     if [ -n "$CURRENT_HEARTBEAT" ] && [ "$CURRENT_HEARTBEAT" != "$LAST_HEARTBEAT" ]; then

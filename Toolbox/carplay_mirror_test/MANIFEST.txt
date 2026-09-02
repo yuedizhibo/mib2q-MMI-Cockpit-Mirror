@@ -1,7 +1,7 @@
 MMI Cockpit Mirror runtime manifest
 ===================================
 
-Release: B3-OPT v51 standalone Toolbox integration
+Release: B3-OPT v52 standalone Toolbox integration
 Vehicle tested: 2020 Audi Q5L
 Firmware gate: MHI2Q_CN_AUG22_P1404
 Destination: context 76 / displayable 58
@@ -40,6 +40,9 @@ Runtime flow
    restores Audi context 74. The mirror never auto-starts after reboot.
 8. FPS telemetry uses a resettable 10-second window. The watchdog caps each
    active high-volume log at 2 MiB and keeps at most one `.previous` copy.
+9. The clock-host shell clears LD_PRELOAD before its keepalive loop. The shell
+   has already loaded libcp_mirror, while child /bin/sleep processes no longer
+   create thousands of duplicate mirror workers during persistent operation.
 
 RGI boundary
 ------------

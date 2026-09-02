@@ -1,4 +1,4 @@
-# B3-OPT 可复现链路（v51）
+# B3-OPT 可复现链路（v52）
 
 本文记录 2020 款 Audi Q5L、`MHI2Q_CN_AUG22_P1404` 上已经跑通的
 `MMI Cockpit Mirror → START` 完整链路。目标是让后来者只依赖本仓库、
@@ -31,7 +31,7 @@ MMI 物理输出 1024×480 @ 59 Hz
 - `screen_read_display()` 通常 `2–7 ms`，观测最大值 `9 ms`。
 - 颜色、80% 缩放、水平居中和向上偏移已经实车确认。
 - VIEW/layout 切回原生 context 后，Java 控制器会重新进入 context 76。
-- v48 修复了旧版常驻宿主仍固定 `sleep 420` 的问题。v51 保留已验证能启动
+- v48 修复了旧版常驻宿主仍固定 `sleep 420` 的问题。v52 保留已验证能启动
   native server 的 marker 跟随式 `/bin/sh -c` 宿主，并让 watchdog 只用记录
   PID 的 `kill -0` 检查存活，避开 P1404 `pidin` 截断造成的约 40 秒误恢复。
 - 仍需继续验证数小时热稳定性；短时结果不等于完成长期寿命测试。
@@ -122,7 +122,7 @@ landscapeVertices=-0.568889 0.819188 0.0  0.568889 0.819188 0.0  0.568889 -0.597
 
 ## 4. 锁定构件与校验值
 
-SD 运行目录是 `Toolbox/carplay_mirror_test/`。当前 v51 必须保留以下构件：
+SD 运行目录是 `Toolbox/carplay_mirror_test/`。当前 v52 必须保留以下构件：
 
 | 文件 | POSIX `cksum / size` | SHA-256 |
 |---|---|---|
@@ -275,7 +275,7 @@ START - 30FPS persistent MMI cockpit mirror
 
    ```text
    MIRROR_CLOCK_HOST=1 LD_PRELOAD=libcp_mirror.so
-     /bin/sh -c "while DIRECT_UPLOAD_TEST exists; sleep 30; done"
+     /bin/sh -c "unset LD_PRELOAD; while DIRECT_UPLOAD_TEST exists; sleep 30; done"
    ```
 
    它只在 marker 存活期间存在，并独占项目的 localhost:5900 bootstrap 监听。
@@ -297,6 +297,8 @@ START - 30FPS persistent MMI cockpit mirror
    `nativeContext=76 source=58 fps=30`。
 10. **持久运行**：`DURATION=0`，直到 STOP、MMI 重启或 watchdog 故障。
     worker 每秒检查 renderer、clock host、Java 状态和帧统计是否继续增长。
+    `unset LD_PRELOAD` 只影响 shell 后续创建的子进程；主 shell 已经加载并运行
+    `libcp_mirror`，所以 `/bin/sleep` 不会反复启动额外 mirror worker。
 
 这套顺序的重要性在于：先证明真实画面和 EGL 输出，再切走奥迪地图；不要提前
 进入 context 76 去赌 renderer 最终能成功。
@@ -395,7 +397,7 @@ Log/CarPlayMirror/java_mirror_state.txt
 显示当前状态和最近十条 FPS 统计。快照至少包含当时存在的核心日志、marker、项目
 PID、锁定构件 `cksum` 以及 `dmdt gs/gd`。正常运行时应至少出现：
 
-v51 每 10 秒输出一次窗口化 FPS 统计，避免 P1404 的 32 位累计乘法溢出，同时
+v52 沿用 v51 的 10 秒窗口化 FPS 统计，避免 P1404 的 32 位累计乘法溢出，同时
 保留 worker 的 12 秒失帧检测能力。每次
 START 会截断上一轮活跃日志；watchdog 每分钟检查高频日志，单个文件超过 2 MiB
 时覆盖一份 `.previous` 后截断当前文件。受控日志因此不会无限增长；手动
@@ -454,10 +456,11 @@ direct upload measured fps_x1000 capture_ms frames 29xxx ...
 | 红蓝互换 | `GPU BGRA swizzle enabled` | 不要恢复 CPU 色彩路径；确认 shader replacement 生效 |
 | 画面在左边/过大 | `config.txt` 和 displayinit | 恢复本文固定 1440×542 + 80% vertices |
 | VIEW 后回地图 | Java `SUSPENDED/ACTIVE` 变化 | 若未在数秒内重入 76，STOP 并检查 controller 日志 |
-| FPS 统计变成负数 | `direct_upload.log` | v50 的 32 位累计计数溢出；覆盖 v51 构件，不代表画面链路曾崩溃 |
-| 约40秒后自动恢复地图 | watchdog 与 clock host | 旧 v48 用被 `pidin` 截断的参数验身份；覆盖 v51 脚本并 Update Toolbox |
-| 宿主存活但没有首帧 | clock host 启动形式 | v49 直接执行 shell 脚本未启动 native server；覆盖 v51 脚本并 Update Toolbox |
-| 约7分钟后自己退出 | clock host 版本 | 旧 v47 固定 420 秒宿主；覆盖 v51 脚本并 Update Toolbox |
+| FPS 统计变成负数 | `direct_upload.log` | v50 的 32 位累计计数溢出；覆盖 v52 构件，不代表画面链路曾崩溃 |
+| 约40秒后自动恢复地图 | watchdog 与 clock host | 旧 v48 用被 `pidin` 截断的参数验身份；覆盖 v52 脚本并 Update Toolbox |
+| 宿主存活但没有首帧 | clock host 启动形式 | v49 直接执行 shell 脚本未启动 native server；覆盖 v52 脚本并 Update Toolbox |
+| 约7分钟后自己退出 | clock host 版本 | 旧 v47 固定 420 秒宿主；覆盖 v52 脚本并 Update Toolbox |
+| 约20分钟后恢复地图，状态为 `Clock host exited` | `mirror_hook.log` 出现大量 `mirror worker stopped` | v51 的 sleep 子进程继承 `LD_PRELOAD` 并重复加载镜像库；v52 在主 shell 启动后清除继承 |
 
 ## 15. 不要重新尝试的旧 B3 分支
 
