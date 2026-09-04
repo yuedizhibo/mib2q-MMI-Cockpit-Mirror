@@ -2,6 +2,37 @@
 
 All notable project changes are documented here.
 
+## 2026-09-05 — Full-chain Compatibility CHECK
+
+### Added
+
+- New Green Menu `CHECK` action backed by `check_cockpit_mirror_compatibility.sh`.
+- CHECK does not decide support from the vehicle model or firmware train name alone. It runs a short, real B3 v52 compatibility probe using the same production worker as START.
+- The probe requires evidence for every critical stage:
+  - locked native artifact validation;
+  - real tiny-RFB clock-host startup;
+  - renderer-local `1024×480` MMI capture;
+  - real EGL submission;
+  - Java controller `ACTIVE` state;
+  - explicit `nativeContext=76 source=58 fps=30` confirmation;
+  - a finite stable ACTIVE window;
+  - Java return to `IDLE` and stock-route recovery.
+- A complete pass prints `CHECK RESULT: CAN USE THIS PROJECT`.
+- Any missing critical stage prints `CHECK RESULT: CANNOT USE CURRENT BUILD` together with the failed stage and reason.
+- Detailed output is saved to `Log/CarPlayMirror/compatibility_check.txt` plus worker/ACTIVE snapshots.
+
+### Changed
+
+- `direct_upload_test_worker.sh` now accepts an optional third argument for a finite run duration. Normal START still omits it and remains persistent; CHECK uses the finite mode.
+- UNINSTALL also removes the compatibility checker script.
+
+### Safety behavior
+
+- CHECK briefly runs the real cockpit mirror path and must be used while parked.
+- On the validated P1404 train, if the verified Java controller is not installed yet, the first CHECK may install it using the same safe installer as START and return `REBOOT REQUIRED`; the post-reboot CHECK performs the final full-chain decision.
+- On unknown firmware trains CHECK does not write the Java controller merely to experiment. If no already verified controller path exists, the current build is not declared compatible.
+- Any probe failure requests the stock Audi route again before exiting.
+
 ## 2026-09-05 — AutoStart and Complete Uninstall
 
 This update keeps the proven B3 renderer-local runtime at **v52** and adds a persistent management layer around it.
@@ -34,6 +65,7 @@ This update keeps the proven B3 renderer-local runtime at **v52** and adds a per
 - Green Menu now exposes:
 
 ```text
+CHECK
 START
 STOP
 AutoStart ON
