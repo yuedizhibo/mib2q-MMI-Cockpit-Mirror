@@ -2,8 +2,11 @@
 export PATH=/proc/boot:/bin:/usr/bin:/usr/sbin:/sbin:$PATH
 VOLUME="$1"
 FPS="${2:-30}"
+DURATION="${3:-0}"
 [ "$FPS" -eq 30 ] || exit 1
-DURATION=0
+case "$DURATION" in
+    *[!0-9]*|'') exit 1 ;;
+esac
 APP="${VOLUME}/Toolbox/carplay_mirror_test"
 STATE="${VOLUME}/Log/CarPlayMirror"
 MARKER="${APP}/DIRECT_UPLOAD_TEST"
@@ -125,7 +128,7 @@ cd "$APP" || fail_test "Could not enter app directory"
 
 # The clock host sends only a four-byte zlib pacing payload. The actual MMI
 # frame is read by libdirect_upload inside the renderer immediately before each
-# GLES texture update.  Keep the proven v48 /bin/sh -c preload host: on P1404
+# GLES texture update. Keep the proven v48 /bin/sh -c preload host: on P1404
 # this form starts libcp_mirror's tiny-RFB constructor, while launching a shell
 # script directly can leave the shell alive without starting the native server.
 # The v52 clock host unsets LD_PRELOAD after /bin/sh itself has loaded the
@@ -163,7 +166,7 @@ grep -q '^direct upload first MMI frame ' "$UPLOADLOG" 2>/dev/null || \
 grep -q '\[egl-diag\] eglSwapBuffers' "$RENDERLOG" 2>/dev/null || \
     fail_test "Renderer did not submit an EGL frame"
 
-# Only now expose ARMED to the already-installed Java/legacy hook.  The v41
+# Only now expose ARMED to the already-installed Java/legacy hook. The v41
 # SD-owned clock already owns port 5900, so an older installed capture hook can
 # no longer steal the only renderer connection.
 touch "$ARMED" || fail_test "Could not arm Java after direct texture gate"
