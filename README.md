@@ -4,7 +4,7 @@
 
 把 MIB2Q 中控当前输出的**完整 MMI 画面**实时镜像到 Audi Virtual Cockpit。
 
-项目基于 [jilleb/mib2-toolbox](https://github.com/jilleb/mib2-toolbox)，加入了 Green Engineering Menu、B3-OPT v52 renderer-local 全画面镜像链路、故障恢复、日志采集、AutoStart 开机自动投屏和完整卸载恢复流程。
+项目基于 [jilleb/mib2-toolbox](https://github.com/jilleb/mib2-toolbox)，加入了 Green Engineering Menu、B3-OPT v52 renderer-local 全画面镜像链路、故障恢复、日志采集、完整链路 CHECK、AutoStart 开机自动投屏和完整卸载恢复流程。
 
 它不是 CarPlay AltScreen，也不是只转发导航箭头：中控显示 CarPlay 时仪表显示 CarPlay，中控显示原生 MMI 菜单时仪表也同步显示原生画面。
 
@@ -25,7 +25,7 @@
 - B3 runtime：v52
 - 生命周期：持续运行到 STOP、MMI 完整重启或 watchdog 故障恢复
 
-脚本会拒绝其他固件。不要通过删除固件检查来尝试未知车型或版本。
+正式 START 仍只允许已验证的固件。`CHECK` 不通过车型/固件名称直接判定兼容性，而是运行一次受控的真实 B3 短时测试；但它不会为了测试而向未知固件写入 Java controller。
 
 ## Green Menu
 
@@ -35,6 +35,7 @@
 MQB Coding Toolbox
 └─ Customization
    └─ MMI Cockpit Mirror
+      ├─ CHECK - test whether the complete B3 chain works on this unit
       ├─ START - 30FPS persistent MMI cockpit mirror
       ├─ STOP - disable mirror and restore Audi map
       ├─ AutoStart ON - start B3 automatically after MMI boot
@@ -42,6 +43,45 @@ MQB Coding Toolbox
       ├─ UNINSTALL - remove mirror controller and restore stock state
       └─ LOG RECORD - save current B3 status and logs
 ```
+
+### CHECK
+
+`CHECK` 不是简单读取车型、固件版本后查白名单。它直接复用正式 B3 v52 worker，执行一次有限时长的完整链路探测：
+
+1. 校验当前 SD 包中的锁定 native 构件；
+2. 启动实际 clock host；
+3. 启动实际 renderer，并要求成功读取一帧 `1024×480` MMI 合成画面；
+4. 要求 renderer 真正提交 EGL frame；
+5. 创建正式 B3 的 `ARMED` / `receiver_ready` 条件；
+6. 要求 Java controller 明确进入 `ACTIVE`；
+7. 要求 Java 状态明确确认 `nativeContext=76 source=58 fps=30`；
+8. 保持短时运行，确认链路没有立即失活；
+9. 自动撤销 marker、等待 Java 回到 `IDLE`，并恢复 Audi 原生路线。
+
+只有上述整条链全部通过，屏幕才显示：
+
+```text
+CHECK RESULT: CAN USE THIS PROJECT
+Full B3 chain: PASS
+```
+
+任一关键阶段失败，则显示：
+
+```text
+CHECK RESULT: CANNOT USE CURRENT BUILD
+Full B3 chain: FAIL
+```
+
+同时会显示具体失败阶段，例如 `clock-host`、`mmi-capture-1024x480`、`renderer-egl`、`java-displaymanager-context76` 或 `safe-restore`。完整结果保存到：
+
+```text
+Log/CarPlayMirror/compatibility_check.txt
+```
+
+> [!IMPORTANT]
+> CHECK 会真的短暂进入 B3，因此仪表在测试期间可能短暂显示镜像画面，测试结束后自动恢复。只在车辆静止时执行。
+
+如果是在已验证的 P1404 上第一次运行 CHECK、但 `Cockpit_Mirror.jar` 尚未安装，CHECK 会使用与 START 相同的安全安装器准备 controller，并显示 `REBOOT REQUIRED`。完整重启 MMI 后再次执行 CHECK，第二次才会给出最终的 `CAN USE` / `CANNOT USE` 结果。对于未知固件，CHECK 不会为了实验而写入未经验证的 Java JAR。
 
 ### START
 
@@ -72,7 +112,7 @@ MQB Coding Toolbox
 - 删除 AutoStart startup hook 与持久 marker；
 - 删除 `/mnt/app/eso/hmi/lsd/jars/Cockpit_Mirror.jar`；
 - 删除可能残留的旧版 `carplay_hook.jar`；
-- 删除本项目专属 Green Menu 和 B3/AutoStart 脚本；
+- 删除本项目专属 Green Menu 和 CHECK/B3/AutoStart 脚本；
 - 保留基础 MIB2 Toolbox，不影响其余 Toolbox 功能；
 - 卸载前把现有 Java JAR 保存到 SD 卡作为紧急回滚副本。
 
@@ -83,12 +123,10 @@ UNINSTALL 完成后必须执行一次**完整 MMI 重启**，以卸载 JVM 中�
 1. 下载或克隆本仓库，把仓库根目录的全部文件放到健康的 FAT32 SD 卡根目录。
 2. 按 [MIB2 Toolbox 原始安装说明](https://github.com/jilleb/mib2-toolbox#how-to-install)执行软件更新，确保 Toolbox 完整安装。
 3. 插入 SD 卡并进入 `MMI Cockpit Mirror` 菜单。
-4. 第一次选择 `START` 或 `AutoStart ON` 时会检查 `Cockpit_Mirror.jar`：
-   - 未安装时先备份并安装控制器；
-   - 检测到旧 `carplay_hook.jar` 时先保存备份，再迁移到新控制器；
-   - 首次写入完成后需要完整重启 MMI。
-5. 重启后选择 START 手动投屏，或在已启用 AutoStart 时等待系统自动进入 B3。
-6. 当前版本镜像运行和 AutoStart 都需要 Toolbox SD 卡保持插入。
+4. 可以先运行 CHECK。若 P1404 上尚未安装 controller，第一次 CHECK 会准备 `Cockpit_Mirror.jar` 并要求完整重启；重启后再次 CHECK 执行真正的完整链路测试。
+5. 第一次选择 `START` 或 `AutoStart ON` 时同样会检查 `Cockpit_Mirror.jar`：未安装时先备份并安装控制器；检测到旧 `carplay_hook.jar` 时先保存备份，再迁移到新控制器。
+6. 重启后选择 START 手动投屏，或在已启用 AutoStart 时等待系统自动进入 B3。
+7. 当前版本镜像运行、CHECK 和 AutoStart 都需要 Toolbox SD 卡保持插入。
 
 控制器备份、AutoStart 备份和安装/卸载状态保存在：
 
@@ -112,6 +150,7 @@ Backup/MHI2Q_CN_AUG22_P1404/MMI_Cockpit_Mirror/
 - worker、renderer、clock host 和 watchdog 都记录独立 PID；
 - watchdog 使用 `kill -0` 检查 PID，不依赖 P1404 会截断的进程命令行；
 - 首帧、EGL、Java context 或帧计数任一门控失败都会先撤销镜像标记；
+- CHECK 使用与正式 START 相同的 worker，并以有限时长模式自动退出和恢复；
 - STOP 或故障会恢复 Audi `context 74`；
 - AutoStart 启动条件超时会保持 stock route，不强制接管仪表；
 - UNINSTALL 会同步移除 AutoStart hook，避免卸载后仍在开机尝试启动。
@@ -126,36 +165,36 @@ Backup/MHI2Q_CN_AUG22_P1404/MMI_Cockpit_Mirror/
 Log/CarPlayMirror/Records/B3_<timestamp>_<pid>/
 ```
 
-主要文件包括：
+CHECK 另外生成：
 
-- `direct_upload_status.txt`
-- `direct_upload.log`
-- `direct_upload_renderer.log`
-- `direct_upload_capture_host.log`
-- `direct_upload_watchdog.log`
-- `direct_upload_worker.log`
-- `java_mirror_state.txt`
-- `SUMMARY.txt`
+```text
+Log/CarPlayMirror/compatibility_check.txt
+Log/CarPlayMirror/compatibility_check_worker.log
+Log/CarPlayMirror/compatibility_check_active_status.txt
+Log/CarPlayMirror/compatibility_check_java_active.txt
+```
 
-常驻日志不会无限增长：每次 START 会清空上一轮活跃日志；运行期间 watchdog 定期检查高频日志，单个文件超过 2 MiB 时只保留一份 `.previous` 后重新记录。
+常驻日志不会无限增长：每次 START/CHECK 会清空当前 B3 活跃日志；运行期间 watchdog 定期检查高频日志，单个文件超过 2 MiB 时只保留一份 `.previous` 后重新记录。
 
 ## 项目结构
 
 ```text
-Toolbox/GEM/mqb-mmiCockpitMirror.esd       Green Menu 子菜单
-Toolbox/scripts/start_direct_upload_test.sh  B3 START
-Toolbox/scripts/stop_direct_upload_test.sh   B3 STOP
-Toolbox/scripts/autostart_cockpit_mirror_*   AutoStart ON/OFF/boot runner
-Toolbox/scripts/uninstall_cockpit_mirror.sh  完整卸载恢复
-Toolbox/scripts/record_b3_logs.sh             日志快照
-Toolbox/carplay_mirror_test/                  QNX runtime 与固定配置
-Toolbox/apps/mmi-cockpit-mirror/              Cockpit_Mirror.jar
-src/native/                                   native 采集与 renderer 注入源码
-src/java/                                     仪表控制器及兼容源码
-build-scripts/                                构建与 renderer 修补脚本
-docs/B3_REPRODUCIBLE_CHAIN.md                 完整可复现链路
-docs/V52_CLOCK_HOST_FIX.md                    v52 长时退出修复说明
-CHANGELOG.md                                  项目更新日志
+Toolbox/GEM/mqb-mmiCockpitMirror.esd             Green Menu 子菜单
+Toolbox/scripts/check_cockpit_mirror_compatibility.sh  完整链路 CHECK
+Toolbox/scripts/start_direct_upload_test.sh       B3 START
+Toolbox/scripts/stop_direct_upload_test.sh        B3 STOP
+Toolbox/scripts/direct_upload_test_worker.sh      正式/有限时长共用 B3 worker
+Toolbox/scripts/autostart_cockpit_mirror_*        AutoStart ON/OFF/boot runner
+Toolbox/scripts/uninstall_cockpit_mirror.sh       完整卸载恢复
+Toolbox/scripts/record_b3_logs.sh                  日志快照
+Toolbox/carplay_mirror_test/                       QNX runtime 与固定配置
+Toolbox/apps/mmi-cockpit-mirror/                   Cockpit_Mirror.jar
+src/native/                                        native 采集与 renderer 注入源码
+src/java/                                          仪表控制器及兼容源码
+build-scripts/                                     构建与 renderer 修补脚本
+docs/B3_REPRODUCIBLE_CHAIN.md                      完整可复现链路
+docs/V52_CLOCK_HOST_FIX.md                         v52 长时退出修复说明
+CHANGELOG.md                                       项目更新日志
 ```
 
 ## 当前状态
@@ -165,6 +204,7 @@ CHANGELOG.md                                  项目更新日志
 - v52 修复 clock host 的 `LD_PRELOAD` 继承问题，并保留实车验证过的 B3 renderer-local 链路；
 - watchdog 已改为 PID 存活检测，消除了旧版约 40 秒误恢复；
 - 2026-09-05 新增完整 UNINSTALL 和 AutoStart ON/OFF 管理流程；
+- 2026-09-05 新增真实 B3 全链路 CHECK：只有 capture、EGL、Java context76/source58 和安全恢复全部通过才判定可用；
 - AutoStart 当前仍依赖 Toolbox SD 卡；
 - 数小时热稳定性和其他固件兼容性尚未声明完成。
 
@@ -176,7 +216,7 @@ CHANGELOG.md                                  项目更新日志
 - [luka-dev/mib2q-carplay-rgi](https://github.com/luka-dev/mib2q-carplay-rgi)：MHI2Q CarPlay/RGI 研究、Java 插件结构、QNX hook 与仪表渲染参考。
 - [Lanye-z/mib2-toolbox-carplay-rgi](https://github.com/Lanye-z/mib2-toolbox-carplay-rgi)：Toolbox 与 RGI 的早期整合和部署参考。
 
-本项目的核心增量包括 renderer-local 全 MMI 纹理读取、displayable 58 输出、持久化 30 FPS 控制、VIEW 恢复、PID watchdog、实车日志/回滚流程，以及 AutoStart / 完整卸载管理能力。
+本项目的核心增量包括 renderer-local 全 MMI 纹理读取、displayable 58 输出、持久化 30 FPS 控制、VIEW 恢复、PID watchdog、实车日志/回滚流程、完整链路 CHECK，以及 AutoStart / 完整卸载管理能力。
 
 ## 许可证
 
