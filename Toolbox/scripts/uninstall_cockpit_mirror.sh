@@ -17,6 +17,9 @@ LOG="${BACKUP}/uninstall_controller.log"
 STATUS="${BACKUP}/uninstall_status.txt"
 MENU="/mnt/app/eso/hmi/engdefs/mqb-mmiCockpitMirror.esd"
 INSTALLED_SCRIPTS="/mnt/app/eso/hmi/engdefs/scripts/mqb"
+STARTUP="/etc/boot/startup.sh"
+AUTOSTART_MARKER="${INSTALLED_SCRIPTS}/.mmi_cockpit_mirror_autostart"
+AUTOSTART_BEGIN="# MMI COCKPIT MIRROR AUTOSTART BEGIN"
 TARGET_EXISTED=0
 LEGACY_EXISTED=0
 ACTIVE=0
@@ -41,6 +44,20 @@ restore_stock_route() {
     /eso/bin/apps/dmdt sc 1 72 >>"$LOG" 2>&1
     sleep 1
     /eso/bin/apps/dmdt sc 1 74 >>"$LOG" 2>&1
+}
+
+remove_autostart() {
+    [ -f "$STARTUP" ] || return 0
+    mount -uw /mnt/system 2>/dev/null || return 1
+    if grep -qF "$AUTOSTART_BEGIN" "$STARTUP" 2>/dev/null; then
+        sed -i '/# MMI COCKPIT MIRROR AUTOSTART BEGIN/,/# MMI COCKPIT MIRROR AUTOSTART END/d' "$STARTUP" || {
+            mount -ur /mnt/system 2>/dev/null
+            return 1
+        }
+    fi
+    sync
+    mount -ur /mnt/system 2>/dev/null || return 1
+    ! grep -qF "$AUTOSTART_BEGIN" "$STARTUP" 2>/dev/null
 }
 
 rollback() {
@@ -79,13 +96,9 @@ log "===== MMI Cockpit Mirror complete uninstall ====="
 log "Firmware reported by unit: ${VERSION}"
 log "Stopping B3/B5 runtime and restoring the stock Audi cockpit route first."
 
-# Stop the active B3 chain gracefully when possible. The worker removes its
-# renderer/clock processes and asks Java to return to IDLE before we touch JARs.
 if [ -x "${SCRIPTDIR}/stop_direct_upload_test.sh" ]; then
     "${SCRIPTDIR}/stop_direct_upload_test.sh" >/dev/null 2>&1 || :
 fi
-
-# Older project builds may still have the legacy ARMED/B5 runtime alive.
 if [ -f "${APP}/ARMED" ] && [ -x "${SCRIPTDIR}/stop_carplay_mirror_test.sh" ]; then
     "${SCRIPTDIR}/stop_carplay_mirror_test.sh" >/dev/null 2>&1 || :
 fi
@@ -101,9 +114,9 @@ safe_kill_file "${STATE}/direct_upload_watchdog.pid"
 restore_stock_route
 sync
 
-# Keep exact pre-uninstall copies on SD only as an emergency rollback aid.
-# Successful uninstall intentionally does NOT restore either custom Java JAR:
-# both names belong to this mirror project's current/legacy controller chain.
+log "Removing persistent AutoStart hook from startup.sh."
+remove_autostart || fail "Could not remove MMI Cockpit Mirror AutoStart block"
+
 if [ -f "$TARGET" ]; then
     TARGET_EXISTED=1
     cp "$TARGET" "$TARGET_SNAPSHOT" || fail "Could not back up Cockpit_Mirror.jar before removal"
@@ -116,13 +129,12 @@ fi
 ACTIVE=1
 mount -uw /mnt/app || fail "Could not mount /mnt/app read-write"
 
+rm -f "$AUTOSTART_MARKER" || fail "Could not remove AutoStart marker"
 rm -f "$TARGET" "${TARGET}.tmp" "${TARGET}.rollback" || fail "Could not remove Cockpit_Mirror.jar"
 rm -f "$LEGACY" "${LEGACY}.tmp" "${LEGACY}.rollback" || fail "Could not remove legacy carplay_hook.jar"
 [ ! -e "$TARGET" ] || fail "Cockpit_Mirror.jar still exists after removal"
 [ ! -e "$LEGACY" ] || fail "carplay_hook.jar still exists after removal"
 
-# Remove only the files introduced specifically for the MMI Cockpit Mirror.
-# The base MIB2 Toolbox and its unrelated scripts remain installed.
 rm -f "$MENU" || fail "Could not remove MMI Cockpit Mirror GEM menu"
 for NAME in \
     start_direct_upload_test.sh \
@@ -130,13 +142,15 @@ for NAME in \
     direct_upload_test_worker.sh \
     direct_upload_restore_watchdog.sh \
     record_b3_logs.sh \
-    ensure_cockpit_mirror_controller.sh
+    ensure_cockpit_mirror_controller.sh \
+    autostart_cockpit_mirror_boot.sh \
+    autostart_cockpit_mirror_on.sh \
+    autostart_cockpit_mirror_off.sh \
+    toggle_cockpit_mirror_autostart.sh
  do
     rm -f "${INSTALLED_SCRIPTS}/${NAME}" || fail "Could not remove installed script ${NAME}"
  done
 
-# Remove this script last. The running shell already has the script open, so
-# unlinking the installed copy is safe; the SD-card source remains available.
 rm -f "${INSTALLED_SCRIPTS}/uninstall_cockpit_mirror.sh" || fail "Could not remove installed uninstall script"
 
 sync || fail "sync failed"
@@ -150,6 +164,7 @@ rm -f "${STATE}/direct_upload_worker.pid" "${STATE}/direct_upload_renderer.pid" 
     echo "state=REBOOT_REQUIRED"
     echo "cockpit_mirror_jar=REMOVED"
     echo "legacy_carplay_hook_jar=REMOVED"
+    echo "autostart=REMOVED"
     echo "mirror_menu=REMOVED"
     echo "mirror_scripts=REMOVED"
     echo "stock_route=context74"
@@ -157,7 +172,7 @@ rm -f "${STATE}/direct_upload_worker.pid" "${STATE}/direct_upload_renderer.pid" 
 } > "$STATUS"
 sync
 
-log "MMI Cockpit Mirror persistent files were removed from the unit."
+log "MMI Cockpit Mirror persistent files and AutoStart hook were removed from the unit."
 log "Cockpit route was restored to Audi context 74."
 log "Perform one COMPLETE MMI reboot now to unload the previously loaded Java classes."
 log "After reboot the unit is back to the pre-mirror state; the base MIB2 Toolbox is left intact."
