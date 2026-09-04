@@ -137,6 +137,7 @@ rm -f "$LEGACY" "${LEGACY}.tmp" "${LEGACY}.rollback" || fail "Could not remove l
 
 rm -f "$MENU" || fail "Could not remove MMI Cockpit Mirror GEM menu"
 for NAME in \
+    check_cockpit_mirror_compatibility.sh \
     start_direct_upload_test.sh \
     stop_direct_upload_test.sh \
     direct_upload_test_worker.sh \
