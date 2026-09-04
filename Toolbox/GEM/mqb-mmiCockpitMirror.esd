@@ -12,5 +12,9 @@ script
    label   "STOP - disable mirror and restore Audi map"
 
 script
+   value   sys 1 0x0100 "/eso/hmi/engdefs/scripts/mqb/uninstall_cockpit_mirror.sh"
+   label   "UNINSTALL - remove mirror controller and restore stock state"
+
+script
    value   sys 1 0x0100 "/eso/hmi/engdefs/scripts/mqb/record_b3_logs.sh"
    label   "LOG RECORD - save current B3 status and logs"
