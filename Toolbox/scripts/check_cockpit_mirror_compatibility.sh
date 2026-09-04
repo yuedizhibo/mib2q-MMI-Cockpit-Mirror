@@ -19,6 +19,9 @@ RESULT_FILE="${STATE}/compatibility_check.txt"
 CHECK_LOG="${STATE}/compatibility_check_worker.log"
 ACTIVE_SNAPSHOT="${STATE}/compatibility_check_active_status.txt"
 JAVA_ACTIVE_SNAPSHOT="${STATE}/compatibility_check_java_active.txt"
+DMDT_DISPLAYABLES="${STATE}/compatibility_check_dmdt_displayables.txt"
+DMDT_CONTEXTS="${STATE}/compatibility_check_dmdt_contexts.txt"
+DMDT_ACTIVE="${STATE}/compatibility_check_dmdt_active.txt"
 DMDT_AFTER="${STATE}/compatibility_check_dmdt_after.txt"
 STATUS="${STATE}/direct_upload_status.txt"
 JAVA_STATE="${STATE}/java_mirror_state.txt"
@@ -39,7 +42,7 @@ write_result() {
     DETAIL="$3"
     FPS_VALUE="$4"
     {
-        echo "version=b3-full-chain-compat-check-v1"
+        echo "version=b3-full-chain-compat-check-v2"
         echo "result=${RESULT}"
         echo "stage=${STAGE}"
         echo "detail=${DETAIL}"
@@ -47,13 +50,17 @@ write_result() {
         echo "brand=${BRAND}"
         echo "fazit=${FAZIT}"
         echo "probe_seconds=${CHECK_DURATION}"
+        echo "displayable58_definition=$([ -f "$DMDT_DISPLAYABLES" ] && grep -q '^[[:space:]]*58[[:space:]]' "$DMDT_DISPLAYABLES" 2>/dev/null && echo PASS || echo FAIL)"
+        echo "context76_definition=$([ -f "$DMDT_CONTEXTS" ] && grep -q '^[[:space:]]*76[[:space:]].*|' "$DMDT_CONTEXTS" 2>/dev/null && echo PASS || echo FAIL)"
         echo "clock_trigger=$([ -f "$HOOKLOG" ] && grep -q '^mirror first direct-upload trigger sent ' "$HOOKLOG" 2>/dev/null && echo PASS || echo FAIL)"
         echo "mmi_1024x480_frame=$([ -f "$UPLOADLOG" ] && grep -q '^direct upload first MMI frame ' "$UPLOADLOG" 2>/dev/null && echo PASS || echo FAIL)"
         echo "egl_submit=$([ -f "$RENDERLOG" ] && grep -q '\[egl-diag\] eglSwapBuffers' "$RENDERLOG" 2>/dev/null && echo PASS || echo FAIL)"
         echo "java_active=$([ -f "$JAVA_ACTIVE_SNAPSHOT" ] && echo PASS || echo FAIL)"
         echo "context76_source58=$([ -f "$JAVA_ACTIVE_SNAPSHOT" ] && grep -q 'nativeContext=76 source=58 fps=30' "$JAVA_ACTIVE_SNAPSHOT" 2>/dev/null && echo PASS || echo FAIL)"
+        echo "dmdt_context76=$([ -f "$DMDT_ACTIVE" ] && grep -q 'context id: 76' "$DMDT_ACTIVE" 2>/dev/null && echo PASS || echo FAIL)"
         echo "worker_active=$([ -f "$ACTIVE_SNAPSHOT" ] && echo PASS || echo FAIL)"
         echo "java_return_idle=$([ -f "$JAVA_STATE" ] && grep -q '^state=IDLE' "$JAVA_STATE" 2>/dev/null && echo PASS || echo FAIL)"
+        echo "dmdt_context74=$([ -f "$DMDT_AFTER" ] && grep -q 'context id: 74' "$DMDT_AFTER" 2>/dev/null && echo PASS || echo FAIL)"
         echo "measured_fps_x1000=${FPS_VALUE}"
         date
     } > "$RESULT_FILE"
@@ -66,11 +73,12 @@ print_pass() {
     echo " CHECK RESULT: CAN USE THIS PROJECT"
     echo " Full B3 chain: PASS"
     echo "============================================"
+    echo "DisplayManager 58 / 76 definitions: PASS"
     echo "1024x480 MMI capture: PASS"
     echo "renderer / EGL: PASS"
     echo "Java controller: PASS"
-    echo "context 76 / displayable 58: PASS"
-    echo "restore to stock route: PASS"
+    echo "live context 76 / displayable 58: PASS"
+    echo "restore to context 74: PASS"
     [ -n "$1" ] && echo "measured fps_x1000: $1"
     echo "Detailed result: ${RESULT_FILE}"
 }
@@ -101,8 +109,23 @@ echo "It performs a short real B3 run and automatically restores the Audi route.
 echo "Firmware reported by unit: ${VERSION}"
 echo ""
 
-# An already healthy B3 session is stronger evidence than another probe. Do
-# not interrupt a working mirror merely to prove that the same chain works.
+export IPL_CONFIG_DIR=/etc/eso/production
+/eso/bin/apps/dmdt gd >"$DMDT_DISPLAYABLES" 2>&1
+GD_RC=$?
+/eso/bin/apps/dmdt gc >"$DMDT_CONTEXTS" 2>&1
+GC_RC=$?
+if [ "$GD_RC" -ne 0 ] || ! grep -q '^[[:space:]]*58[[:space:]]' "$DMDT_DISPLAYABLES" 2>/dev/null; then
+    write_result "NOT_COMPATIBLE" "displaymanager-displayable58" "DisplayManager does not expose required displayable 58" ""
+    print_fail "displaymanager-displayable58" "Required displayable 58 is not available."
+    exit 1
+fi
+if [ "$GC_RC" -ne 0 ] || ! grep -q '^[[:space:]]*76[[:space:]].*|' "$DMDT_CONTEXTS" 2>/dev/null; then
+    write_result "NOT_COMPATIBLE" "displaymanager-context76" "DisplayManager does not expose required context 76" ""
+    print_fail "displaymanager-context76" "Required context 76 is not available."
+    exit 1
+fi
+echo "[CHECK] DisplayManager exposes displayable 58 and context 76"
+
 if [ -f "${APP}/DIRECT_UPLOAD_TEST" ]; then
     if grep -q '^state=ACTIVE' "$STATUS" 2>/dev/null && \
        grep -q '^state=ACTIVE' "$JAVA_STATE" 2>/dev/null && \
@@ -110,17 +133,20 @@ if [ -f "${APP}/DIRECT_UPLOAD_TEST" ]; then
        pid_file_alive "${STATE}/direct_upload_worker.pid" && \
        pid_file_alive "${STATE}/direct_upload_renderer.pid" && \
        pid_file_alive "${STATE}/direct_upload_capture.pid"; then
-        cp "$STATUS" "$ACTIVE_SNAPSHOT" 2>/dev/null || :
-        cp "$JAVA_STATE" "$JAVA_ACTIVE_SNAPSHOT" 2>/dev/null || :
-        FPS_VALUE=""
-        LINE=$(grep '^direct upload measured fps_x1000 capture_ms frames ' "$UPLOADLOG" 2>/dev/null | tail -1)
-        if [ -n "$LINE" ]; then
-            set -- $LINE
-            FPS_VALUE="$7"
+        /eso/bin/apps/dmdt gs >"$DMDT_ACTIVE" 2>&1
+        if grep -q 'context id: 76' "$DMDT_ACTIVE" 2>/dev/null; then
+            cp "$STATUS" "$ACTIVE_SNAPSHOT" 2>/dev/null || :
+            cp "$JAVA_STATE" "$JAVA_ACTIVE_SNAPSHOT" 2>/dev/null || :
+            FPS_VALUE=""
+            LINE=$(grep '^direct upload measured fps_x1000 capture_ms frames ' "$UPLOADLOG" 2>/dev/null | tail -1)
+            if [ -n "$LINE" ]; then
+                set -- $LINE
+                FPS_VALUE="$7"
+            fi
+            write_result "COMPATIBLE" "already-active" "Existing B3 session is healthy and already proves the complete chain" "$FPS_VALUE"
+            print_pass "$FPS_VALUE"
+            exit 0
         fi
-        write_result "COMPATIBLE" "already-active" "Existing B3 session is healthy and already proves the complete chain" "$FPS_VALUE"
-        print_pass "$FPS_VALUE"
-        exit 0
     fi
 
     echo "Stale or unhealthy B3 state detected; restoring stock route before CHECK."
@@ -128,7 +154,6 @@ if [ -f "${APP}/DIRECT_UPLOAD_TEST" ]; then
     sleep 2
 fi
 
-# Do not silently interfere with an older B5/legacy session that owns ARMED.
 if [ -f "${APP}/ARMED" ] && [ ! -f "${APP}/DIRECT_UPLOAD_TEST" ]; then
     write_result "NOT_COMPATIBLE" "runtime-conflict" "Another mirror runtime is ARMED; stop it before compatibility testing" ""
     print_fail "runtime-conflict" "Another mirror runtime is active. Stop it first, then run CHECK again."
@@ -141,11 +166,6 @@ fi
     exit 1
 }
 
-# A full-chain test requires the exact Java controller to already be loadable
-# by the running MMI JVM. On the known P1404 train CHECK may safely prepare the
-# verified controller using the same installer as START, then requires one
-# complete reboot before the live probe. On unknown trains CHECK never writes a
-# Java JAR merely to experiment with compatibility.
 CONTROLLER_OK=0
 if [ -f "$CONTROLLER" ]; then
     set -- $(cksum "$CONTROLLER" 2>/dev/null)
@@ -180,7 +200,7 @@ if [ "$CONTROLLER_OK" -ne 1 ] || [ -f "$LEGACY_CONTROLLER" ]; then
     fi
 fi
 
-rm -f "$ACTIVE_SNAPSHOT" "$JAVA_ACTIVE_SNAPSHOT" "$DMDT_AFTER" "$CHECK_LOG"
+rm -f "$ACTIVE_SNAPSHOT" "$JAVA_ACTIVE_SNAPSHOT" "$DMDT_ACTIVE" "$DMDT_AFTER" "$CHECK_LOG"
 
 echo "Starting real B3 compatibility probe (${CHECK_DURATION}s ACTIVE window)..."
 echo "The cockpit may briefly show the mirrored MMI during this test."
@@ -188,6 +208,7 @@ echo "The cockpit may briefly show the mirrored MMI during this test."
 CHECK_PID=$!
 SEEN_ACTIVE=0
 SEEN_JAVA_ACTIVE=0
+SEEN_DMDT_ACTIVE=0
 
 while kill -0 "$CHECK_PID" 2>/dev/null; do
     if [ "$SEEN_ACTIVE" -eq 0 ] && grep -q '^state=ACTIVE' "$STATUS" 2>/dev/null; then
@@ -201,12 +222,18 @@ while kill -0 "$CHECK_PID" 2>/dev/null; do
         SEEN_JAVA_ACTIVE=1
         echo "[CHECK] Java confirmed context76 / source58"
     fi
+    if [ "$SEEN_DMDT_ACTIVE" -eq 0 ] && [ "$SEEN_JAVA_ACTIVE" -eq 1 ]; then
+        /eso/bin/apps/dmdt gs >"$DMDT_ACTIVE" 2>&1
+        if grep -q 'context id: 76' "$DMDT_ACTIVE" 2>/dev/null; then
+            SEEN_DMDT_ACTIVE=1
+            echo "[CHECK] DisplayManager reports live context 76"
+        fi
+    fi
     sleep 1
 done
 wait "$CHECK_PID"
 CHECK_RC=$?
 
-export IPL_CONFIG_DIR=/etc/eso/production
 /eso/bin/apps/dmdt gs >"$DMDT_AFTER" 2>&1
 DMDT_RC=$?
 
@@ -224,19 +251,23 @@ FRAME_OK=0
 EGL_OK=0
 JAVA_OK=0
 ACTIVE_OK=0
+DMDT_ACTIVE_OK=0
 IDLE_OK=0
+STOCK_CONTEXT_OK=0
 [ -f "$HOOKLOG" ] && grep -q '^mirror first direct-upload trigger sent ' "$HOOKLOG" 2>/dev/null && CLOCK_OK=1
 [ -f "$UPLOADLOG" ] && grep -q '^direct upload first MMI frame ' "$UPLOADLOG" 2>/dev/null && FRAME_OK=1
 [ -f "$RENDERLOG" ] && grep -q '\[egl-diag\] eglSwapBuffers' "$RENDERLOG" 2>/dev/null && EGL_OK=1
 [ -f "$JAVA_ACTIVE_SNAPSHOT" ] && grep -q 'nativeContext=76 source=58 fps=30' "$JAVA_ACTIVE_SNAPSHOT" 2>/dev/null && JAVA_OK=1
 [ -f "$ACTIVE_SNAPSHOT" ] && ACTIVE_OK=1
+[ -f "$DMDT_ACTIVE" ] && grep -q 'context id: 76' "$DMDT_ACTIVE" 2>/dev/null && DMDT_ACTIVE_OK=1
 [ -f "$JAVA_STATE" ] && grep -q '^state=IDLE' "$JAVA_STATE" 2>/dev/null && IDLE_OK=1
+[ -f "$DMDT_AFTER" ] && grep -q 'context id: 74' "$DMDT_AFTER" 2>/dev/null && STOCK_CONTEXT_OK=1
 
 if [ "$CHECK_RC" -eq 0 ] && [ "$FINAL_STATE" = "FINISHED_SAFE" ] && \
    [ "$CLOCK_OK" -eq 1 ] && [ "$FRAME_OK" -eq 1 ] && [ "$EGL_OK" -eq 1 ] && \
-   [ "$JAVA_OK" -eq 1 ] && [ "$ACTIVE_OK" -eq 1 ] && [ "$IDLE_OK" -eq 1 ] && \
-   [ "$DMDT_RC" -eq 0 ]; then
-    write_result "COMPATIBLE" "complete" "Full B3 renderer-local capture, EGL, Java context76/source58 activation and safe restore all passed" "$FPS_VALUE"
+   [ "$JAVA_OK" -eq 1 ] && [ "$ACTIVE_OK" -eq 1 ] && [ "$DMDT_ACTIVE_OK" -eq 1 ] && \
+   [ "$IDLE_OK" -eq 1 ] && [ "$STOCK_CONTEXT_OK" -eq 1 ] && [ "$DMDT_RC" -eq 0 ]; then
+    write_result "COMPATIBLE" "complete" "Full B3 capture, EGL, Java context76/source58, live DisplayManager context76 and context74 restore all passed" "$FPS_VALUE"
     print_pass "$FPS_VALUE"
     exit 0
 fi
@@ -249,8 +280,9 @@ case "$FINAL_DETAIL" in
         elif [ "$FRAME_OK" -ne 1 ]; then FAILED_STAGE="mmi-capture-1024x480"
         elif [ "$EGL_OK" -ne 1 ]; then FAILED_STAGE="renderer-egl"
         elif [ "$JAVA_OK" -ne 1 ]; then FAILED_STAGE="java-displaymanager-context76"
+        elif [ "$DMDT_ACTIVE_OK" -ne 1 ]; then FAILED_STAGE="displaymanager-live-context76"
         elif [ "$ACTIVE_OK" -ne 1 ]; then FAILED_STAGE="b3-activation"
-        elif [ "$IDLE_OK" -ne 1 ] || [ "$DMDT_RC" -ne 0 ] || [ "$FINAL_STATE" != "FINISHED_SAFE" ]; then FAILED_STAGE="safe-restore"
+        elif [ "$IDLE_OK" -ne 1 ] || [ "$STOCK_CONTEXT_OK" -ne 1 ] || [ "$DMDT_RC" -ne 0 ] || [ "$FINAL_STATE" != "FINISHED_SAFE" ]; then FAILED_STAGE="safe-restore-context74"
         fi
         ;;
 esac
