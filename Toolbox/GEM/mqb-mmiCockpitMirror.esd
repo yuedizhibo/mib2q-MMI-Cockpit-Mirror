@@ -4,6 +4,10 @@
 screen "MMI Cockpit Mirror" Customization
 
 script
+   value   sys 1 0x0100 "/eso/hmi/engdefs/scripts/mqb/check_cockpit_mirror_compatibility.sh"
+   label   "CHECK - test whether the complete B3 chain works on this unit"
+
+script
    value   sys 1 0x0100 "/eso/hmi/engdefs/scripts/mqb/start_direct_upload_test.sh"
    label   "START - 30FPS persistent MMI cockpit mirror"
 
