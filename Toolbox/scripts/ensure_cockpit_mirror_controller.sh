@@ -75,8 +75,11 @@ fi
 # Only validate the SD source when an install or legacy migration is actually
 # required. A mismatched source must never be written to /mnt/app.
 [ -f "$SOURCE" ] || fail "Missing Toolbox/apps/mmi-cockpit-mirror/Cockpit_Mirror.jar"
+if grep -q '^version https://git-lfs.github.com/spec/v1' "$SOURCE" 2>/dev/null; then
+    fail "SD Cockpit_Mirror.jar is a Git LFS pointer, not the real 112564-byte JAR"
+fi
 set -- $(cksum "$SOURCE")
-[ "$1 $2" = "$EXPECTED_JAR" ] || fail "Cockpit_Mirror.jar checksum mismatch"
+[ "$1 $2" = "$EXPECTED_JAR" ] || fail "Cockpit_Mirror.jar checksum mismatch (reported $1 $2, expected $EXPECTED_JAR)"
 
 if [ -f "$TARGET" ]; then
     TARGET_EXISTED=1
