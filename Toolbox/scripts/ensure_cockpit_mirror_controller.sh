@@ -57,10 +57,11 @@ trap 'fail "Installation interrupted"' 1 2 15
 
 log "===== MMI Cockpit Mirror controller check ====="
 [ "$VERSION" = "$EXPECTED_VERSION" ] || fail "This build is only for ${EXPECTED_VERSION}"
-[ -f "$SOURCE" ] || fail "Missing Toolbox/apps/mmi-cockpit-mirror/Cockpit_Mirror.jar"
-set -- $(cksum "$SOURCE")
-[ "$1 $2" = "$EXPECTED_JAR" ] || fail "Cockpit_Mirror.jar checksum mismatch"
 
+# First trust the controller that is already installed on the head unit. START
+# uses the same rule. AutoStart ON should not fail merely because the SD card
+# contains a different/older source JAR when the loaded persistent controller
+# is already the exact verified build and no legacy duplicate is present.
 TARGET_OK=0
 if [ -f "$TARGET" ]; then
     set -- $(cksum "$TARGET" 2>/dev/null)
@@ -70,6 +71,12 @@ if [ "$TARGET_OK" -eq 1 ] && [ ! -f "$LEGACY" ]; then
     log "Cockpit_Mirror.jar is already installed and verified."
     exit 0
 fi
+
+# Only validate the SD source when an install or legacy migration is actually
+# required. A mismatched source must never be written to /mnt/app.
+[ -f "$SOURCE" ] || fail "Missing Toolbox/apps/mmi-cockpit-mirror/Cockpit_Mirror.jar"
+set -- $(cksum "$SOURCE")
+[ "$1 $2" = "$EXPECTED_JAR" ] || fail "Cockpit_Mirror.jar checksum mismatch"
 
 if [ -f "$TARGET" ]; then
     TARGET_EXISTED=1
