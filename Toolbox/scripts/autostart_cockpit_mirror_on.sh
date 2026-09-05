@@ -7,6 +7,9 @@ SCRIPTDIR=$( cd -P -- "$(dirname -- "$(command -v -- "$BASE")")" && pwd -P )
 [ -n "$VOLUME" ] || { echo "No SD-card found"; exit 1; }
 
 EXPECTED_VERSION="MHI2Q_CN_AUG22_P1404"
+EXPECTED_CONTROLLER="140001591 112564"
+CONTROLLER="/mnt/app/eso/hmi/lsd/jars/Cockpit_Mirror.jar"
+LEGACY_CONTROLLER="/mnt/app/eso/hmi/lsd/jars/carplay_hook.jar"
 STARTUP="/etc/boot/startup.sh"
 MARKER="${SCRIPTDIR}/.mmi_cockpit_mirror_autostart"
 RUNNER="${SCRIPTDIR}/autostart_cockpit_mirror_boot.sh"
@@ -21,12 +24,25 @@ mkdir -p "$BACKUP" || exit 1
 [ -f "$STARTUP" ] || { echo "Missing $STARTUP"; exit 1; }
 [ -f "$RUNNER" ] || { echo "Missing autostart boot runner"; exit 1; }
 
-"${SCRIPTDIR}/ensure_cockpit_mirror_controller.sh"
-CONTROLLER_RESULT=$?
-case "$CONTROLLER_RESULT" in
-    0|10) ;;
-    *) echo "Controller preparation failed: $CONTROLLER_RESULT"; exit "$CONTROLLER_RESULT" ;;
-esac
+# Match manual START behavior: if the persistent controller already installed
+# on the head unit is the exact verified build and no legacy duplicate exists,
+# AutoStart does not need to inspect or reinstall the SD-card source JAR.
+CONTROLLER_OK=0
+if [ -f "$CONTROLLER" ]; then
+    set -- $(cksum "$CONTROLLER" 2>/dev/null)
+    [ "$1 $2" = "$EXPECTED_CONTROLLER" ] && CONTROLLER_OK=1
+fi
+if [ "$CONTROLLER_OK" -eq 1 ] && [ ! -f "$LEGACY_CONTROLLER" ]; then
+    echo "Cockpit_Mirror.jar is already installed and verified."
+    CONTROLLER_RESULT=0
+else
+    "${SCRIPTDIR}/ensure_cockpit_mirror_controller.sh"
+    CONTROLLER_RESULT=$?
+    case "$CONTROLLER_RESULT" in
+        0|10) ;;
+        *) echo "Controller preparation failed: $CONTROLLER_RESULT"; exit "$CONTROLLER_RESULT" ;;
+    esac
+fi
 
 if [ ! -f "$STARTUP_BACKUP" ]; then
     cp "$STARTUP" "$STARTUP_BACKUP" || { echo "Could not back up startup.sh"; exit 1; }
