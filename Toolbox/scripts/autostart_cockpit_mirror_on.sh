@@ -11,6 +11,8 @@ EXPECTED_CONTROLLER="140001591 112564"
 CONTROLLER="/mnt/app/eso/hmi/lsd/jars/Cockpit_Mirror.jar"
 LEGACY_CONTROLLER="/mnt/app/eso/hmi/lsd/jars/carplay_hook.jar"
 STARTUP="/etc/boot/startup.sh"
+BOOT_ANCHOR="# DCIVIDEO: Kombi Map"
+BOOT_BLOCK="/tmp/mmi_cockpit_mirror_autostart.block"
 MARKER="${SCRIPTDIR}/.mmi_cockpit_mirror_autostart"
 RUNNER="${SCRIPTDIR}/autostart_cockpit_mirror_boot.sh"
 BEGIN_MARK="# MMI COCKPIT MIRROR AUTOSTART BEGIN"
@@ -27,10 +29,11 @@ mkdir -p "$BACKUP" "$AUTOLOGDIR" || exit 1
 
 write_config_status() {
     {
-        echo "version=autostart-config-v2"
+        echo "version=autostart-config-v3"
         echo "state=$1"
         echo "detail=$2"
         echo "startup=${STARTUP}"
+        echo "boot_anchor=${BOOT_ANCHOR}"
         echo "marker=${MARKER}"
         echo "log_dir=${AUTOLOGDIR}"
         echo "requires_sd_card=1"
@@ -46,9 +49,6 @@ remove_boot_block_best_effort() {
     mount -ur /mnt/system 2>/dev/null
 }
 
-# Match manual START behavior: if the persistent controller already installed
-# on the head unit is the exact verified build and no legacy duplicate exists,
-# AutoStart does not need to inspect or reinstall the SD-card source JAR.
 CONTROLLER_OK=0
 if [ -f "$CONTROLLER" ]; then
     set -- $(cksum "$CONTROLLER" 2>/dev/null)
@@ -78,29 +78,35 @@ if [ ! -f "$STARTUP_BACKUP" ]; then
     }
 fi
 
-# Always replace our marked block, even when AutoStart was enabled by an older
-# project revision. This upgrades existing installations to the delayed
-# bootstrap form instead of leaving a one-shot early-boot race in startup.sh.
 mount -uw /mnt/system 2>/dev/null || {
     write_config_status "FAILED" "Could not mount /mnt/system read-write"
     echo "Could not mount /mnt/system read-write"
     exit 1
 }
+
 sed -i '/# MMI COCKPIT MIRROR AUTOSTART BEGIN/,/# MMI COCKPIT MIRROR AUTOSTART END/d' "$STARTUP" || {
     mount -ur /mnt/system 2>/dev/null
     write_config_status "FAILED" "Could not remove previous AutoStart block"
     echo "Could not remove previous AutoStart block"
     exit 1
 }
-cat >> "$STARTUP" <<'EOF'
 
+ANCHOR_COUNT=$(grep -cF "$BOOT_ANCHOR" "$STARTUP" 2>/dev/null)
+[ "$ANCHOR_COUNT" = "1" ] || {
+    mount -ur /mnt/system 2>/dev/null
+    write_config_status "FAILED" "Expected exactly one '${BOOT_ANCHOR}' anchor, found ${ANCHOR_COUNT}"
+    echo "AutoStart boot anchor not found exactly once; refusing unsafe startup.sh append."
+    exit 1
+}
+
+cat > "$BOOT_BLOCK" <<'EOF'
 # MMI COCKPIT MIRROR AUTOSTART BEGIN
 (
     N=0
     while [ "$N" -lt 120 ]; do
         if [ -f /mnt/app/eso/hmi/engdefs/scripts/mqb/.mmi_cockpit_mirror_autostart ] && \
-           [ -f /mnt/app/eso/hmi/engdefs/scripts/mqb/autostart_cockpit_mirror_boot.sh ]; then
-            /bin/sh /mnt/app/eso/hmi/engdefs/scripts/mqb/autostart_cockpit_mirror_boot.sh
+           [ -x /mnt/app/eso/hmi/engdefs/scripts/mqb/autostart_cockpit_mirror_boot.sh ]; then
+            /mnt/app/eso/hmi/engdefs/scripts/mqb/autostart_cockpit_mirror_boot.sh
             exit $?
         fi
         /bin/sleep 1
@@ -110,16 +116,43 @@ cat >> "$STARTUP" <<'EOF'
 ) >/tmp/mmi_cockpit_mirror_autostart_bootstrap.log 2>&1 &
 # MMI COCKPIT MIRROR AUTOSTART END
 EOF
+
+sed -i '/# DCIVIDEO: Kombi Map/r /tmp/mmi_cockpit_mirror_autostart.block' "$STARTUP" || {
+    rm -f "$BOOT_BLOCK"
+    mount -ur /mnt/system 2>/dev/null
+    write_config_status "FAILED" "Could not inject AutoStart block at Kombi Map startup anchor"
+    echo "Could not inject AutoStart block at startup anchor"
+    exit 1
+}
+rm -f "$BOOT_BLOCK"
 sync
+
+BLOCK_COUNT=$(grep -cF "$BEGIN_MARK" "$STARTUP" 2>/dev/null)
+ANCHOR_LINE=$(grep -nF "$BOOT_ANCHOR" "$STARTUP" 2>/dev/null | head -1 | cut -d: -f1)
+BLOCK_LINE=$(grep -nF "$BEGIN_MARK" "$STARTUP" 2>/dev/null | head -1 | cut -d: -f1)
+case "$ANCHOR_LINE:$BLOCK_LINE" in
+    *[!0-9:]*|:|*:) LOCATION_OK=0 ;;
+    *) [ "$BLOCK_LINE" -gt "$ANCHOR_LINE" ] && LOCATION_OK=1 || LOCATION_OK=0 ;;
+esac
+
+if [ "$BLOCK_COUNT" != "1" ] || [ "$LOCATION_OK" -ne 1 ]; then
+    sed -i '/# MMI COCKPIT MIRROR AUTOSTART BEGIN/,/# MMI COCKPIT MIRROR AUTOSTART END/d' "$STARTUP" 2>/dev/null
+    sync
+    mount -ur /mnt/system 2>/dev/null
+    write_config_status "FAILED" "AutoStart block placement verification failed"
+    echo "AutoStart block placement verification failed"
+    exit 1
+fi
+
+{
+    echo "anchor_line=${ANCHOR_LINE}"
+    echo "block_line=${BLOCK_LINE}"
+    echo "block_count=${BLOCK_COUNT}"
+} > "${AUTOLOGDIR}/startup_hook_location.txt"
+
 mount -ur /mnt/system 2>/dev/null || {
     write_config_status "FAILED" "Could not remount /mnt/system read-only"
     echo "Could not remount /mnt/system read-only"
-    exit 1
-}
-
-grep -qF "$BEGIN_MARK" "$STARTUP" 2>/dev/null || {
-    write_config_status "FAILED" "AutoStart boot block verification failed"
-    echo "AutoStart boot block verification failed"
     exit 1
 }
 
@@ -143,9 +176,10 @@ mount -ur /mnt/app 2>/dev/null || {
     exit 1
 }
 
-write_config_status "ENABLED" "Delayed bootstrap installed; next complete MMI boot will verify B3 ACTIVE"
+write_config_status "ENABLED" "Boot hook installed at proven Kombi Map startup anchor; next complete MMI boot will verify B3 ACTIVE"
 
 echo "AutoStart ON: enabled."
+echo "Boot hook installed at the proven DCIVIDEO/Kombi Map startup anchor."
 echo "Every complete MMI boot will automatically execute and verify the B3 START chain."
 echo "AutoStart diagnostics will be saved under Log/CarPlayMirror/AutoStart on the Toolbox SD card."
 echo "Keep the Toolbox SD card inserted because the current B3 native runtime is SD-owned."
