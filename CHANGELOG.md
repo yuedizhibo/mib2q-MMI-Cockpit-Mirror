@@ -2,6 +2,43 @@
 
 All notable project changes are documented here.
 
+## 2026-09-05 — AutoStart boot-chain hardening and SD diagnostics
+
+### Fixed
+
+- Hardened the complete boot-time path from `/etc/boot/startup.sh` to a verified B3 `ACTIVE` state.
+- `AutoStart ON` now replaces any older project-marked startup block with a delayed bootstrap loop. This avoids losing AutoStart when `startup.sh` reaches the hook before `/mnt/app` and the installed runner are ready.
+- The boot runner now waits for the Toolbox SD card, firmware shared-memory information, the verified installed `Cockpit_Mirror.jar`, the absence of the legacy duplicate controller, and a responsive DisplayManager before launching B3.
+- AutoStart no longer treats the synchronous exit code of `start_direct_upload_test.sh` as proof that mirroring succeeded. It now requires the live B3 marker, worker/renderer/capture PIDs, Java `ACTIVE`, `nativeContext=76 source=58 fps=30`, and a real `dmdt` report of context 76.
+- A failed boot-time attempt saves the failure evidence, requests the normal STOP/stock-route recovery, waits briefly, and performs at most one controlled retry. Package/checksum failures are treated as non-transient and are not retried.
+- If all attempts fail, the runner requests the stock Audi route and records a final `FAILED` AutoStart state instead of silently exiting after a launcher-level success.
+
+### AutoStart diagnostics
+
+- AutoStart boot diagnostics are now persisted to the Toolbox SD card under:
+
+```text
+Log/CarPlayMirror/AutoStart/
+```
+
+- The directory can contain:
+  - `autostart_config_status.txt`
+  - `autostart_bootstrap.log`
+  - `autostart_boot.log`
+  - `autostart_boot.previous.log`
+  - `autostart_status.txt`
+  - `b3_active_status.txt`
+  - `java_active_status.txt`
+  - `dmdt_active.txt`
+  - per-attempt failure snapshots and `dmdt_after_failure.txt` when startup fails.
+- `/tmp` is used only as an unavoidable early-boot buffer before the SD card exists; the runner copies that evidence to the SD as soon as the Toolbox volume is writable.
+- `LOG RECORD` now includes the complete `Log/CarPlayMirror/AutoStart/` directory in its snapshot, so one manual log record contains both normal B3 and boot-time AutoStart evidence.
+- `AutoStart OFF` records a disabled configuration status to the SD when the Toolbox card is available, but disabling itself does not depend on the SD card.
+
+### Update note
+
+- Existing AutoStart users should re-sync/install the latest Toolbox scripts and select `AutoStart ON` once again. This replaces the old startup block with the delayed-bootstrap version; no UNINSTALL is required.
+
 ## 2026-09-05 — AutoStart controller verification fix
 
 ### Fixed
