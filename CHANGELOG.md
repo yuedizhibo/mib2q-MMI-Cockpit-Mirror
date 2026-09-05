@@ -2,6 +2,15 @@
 
 All notable project changes are documented here.
 
+## 2026-09-05 — AutoStart controller verification fix
+
+### Fixed
+
+- Fixed `AutoStart ON` failing with `Cockpit_Mirror.jar checksum mismatch` even when the head unit already had the exact verified controller installed and manual START worked normally.
+- `ensure_cockpit_mirror_controller.sh` now checks the persistent controller on the head unit first, matching START behavior.
+- If `/mnt/app/eso/hmi/lsd/jars/Cockpit_Mirror.jar` already matches the locked checksum and no legacy `carplay_hook.jar` is present, controller preparation succeeds without requiring the SD-card source JAR to match.
+- The SD-card source JAR is still strictly checksum-verified whenever an install or legacy migration is actually required, so an unverified JAR is never written to `/mnt/app`.
+
 ## 2026-09-05 — Full-chain Compatibility CHECK
 
 ### Added
