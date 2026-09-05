@@ -29,6 +29,31 @@ rm -f "$MARKER"
 sync
 mount -ur /mnt/app 2>/dev/null || { echo "Could not remount /mnt/app read-only"; exit 1; }
 
+rm -f /tmp/mmi_cockpit_mirror_autostart_bootstrap.log \
+      /tmp/mmi_cockpit_mirror_autostart_runner.log
+
+# Preserve an OFF record on the Toolbox SD when it is present, but never make
+# disabling AutoStart depend on the SD card being available.
+VOLUME=""
+[ -d /net/mmx/fs/sda0/Toolbox ] && VOLUME="/net/mmx/fs/sda0"
+[ -z "$VOLUME" ] && [ -d /net/mmx/fs/sdb0/Toolbox ] && VOLUME="/net/mmx/fs/sdb0"
+if [ -n "$VOLUME" ]; then
+    mount -uw "$VOLUME" 2>/dev/null || :
+    AUTOLOGDIR="${VOLUME}/Log/CarPlayMirror/AutoStart"
+    mkdir -p "$AUTOLOGDIR" 2>/dev/null
+    if [ -d "$AUTOLOGDIR" ]; then
+        {
+            echo "version=autostart-config-v2"
+            echo "state=DISABLED"
+            echo "detail=AutoStart startup block and persistent marker removed"
+            echo "startup=${STARTUP}"
+            echo "marker=${MARKER}"
+            date
+        } > "${AUTOLOGDIR}/autostart_config_status.txt"
+        sync
+    fi
+fi
+
 echo "AutoStart OFF: disabled."
 echo "Future MMI boots will stay on the normal Audi route until START is selected manually."
 echo "If B3 is currently active, it keeps running; use STOP if you also want to stop the current session."
