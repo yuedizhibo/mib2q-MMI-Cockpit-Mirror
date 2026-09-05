@@ -150,7 +150,10 @@ echo "B3 prerequisites ready after boot stabilization"
 sleep 3
 
 ATTEMPT=1
+LAST_ATTEMPT=0
+DETAIL=""
 while [ "$ATTEMPT" -le 2 ]; do
+    LAST_ATTEMPT="$ATTEMPT"
     [ -f "$MARKER" ] || { write_status "DISABLED" "$ATTEMPT" "AutoStart marker removed"; exit 0; }
 
     if b3_is_active; then
@@ -168,24 +171,30 @@ while [ "$ATTEMPT" -le 2 ]; do
     START_RC=$?
     echo "B3 START command exited with code ${START_RC}"
 
-    WAIT=0
     ACTIVE=0
-    FAILED=0
     DETAIL=""
-    while [ "$WAIT" -lt 50 ]; do
-        [ -f "$MARKER" ] || { write_status "DISABLED" "$ATTEMPT" "AutoStart marker removed while starting"; exit 0; }
-        if b3_is_active; then
-            ACTIVE=1
-            break
-        fi
+    if [ "$START_RC" -ne 0 ]; then
+        DETAIL="B3 START command failed with rc=${START_RC}"
         if grep -q '^state=FAILED' "$B3_STATUS" 2>/dev/null; then
-            FAILED=1
-            DETAIL=$(sed -n 's/^detail=//p' "$B3_STATUS" 2>/dev/null | head -1)
-            break
+            STATUS_DETAIL=$(sed -n 's/^detail=//p' "$B3_STATUS" 2>/dev/null | head -1)
+            [ -n "$STATUS_DETAIL" ] && DETAIL="$STATUS_DETAIL"
         fi
-        sleep 1
-        WAIT=$((WAIT + 1))
-    done
+    else
+        WAIT=0
+        while [ "$WAIT" -lt 50 ]; do
+            [ -f "$MARKER" ] || { write_status "DISABLED" "$ATTEMPT" "AutoStart marker removed while starting"; exit 0; }
+            if b3_is_active; then
+                ACTIVE=1
+                break
+            fi
+            if grep -q '^state=FAILED' "$B3_STATUS" 2>/dev/null; then
+                DETAIL=$(sed -n 's/^detail=//p' "$B3_STATUS" 2>/dev/null | head -1)
+                break
+            fi
+            sleep 1
+            WAIT=$((WAIT + 1))
+        done
+    fi
 
     if [ "$ACTIVE" -eq 1 ]; then
         cp "$B3_STATUS" "${AUTOLOGDIR}/b3_active_status.txt" 2>/dev/null
@@ -219,7 +228,7 @@ done
 [ -x "$STOP" ] && /bin/sh "$STOP" >/dev/null 2>&1
 export IPL_CONFIG_DIR=/etc/eso/production
 /eso/bin/apps/dmdt gs >"${AUTOLOGDIR}/dmdt_after_failure.txt" 2>&1
-write_status "FAILED" "$ATTEMPT" "$DETAIL"
+write_status "FAILED" "$LAST_ATTEMPT" "$DETAIL"
 echo "AutoStart FAILED after controlled startup attempts; stock route requested."
 date
 exit 1
