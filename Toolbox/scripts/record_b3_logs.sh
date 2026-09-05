@@ -7,6 +7,7 @@ SCRIPTDIR=$( cd -P -- "$(dirname -- "$(command -v -- "$BASE")")" && pwd -P )
 
 APP="${VOLUME}/Toolbox/carplay_mirror_test"
 STATE="${VOLUME}/Log/CarPlayMirror"
+AUTOSTART="${STATE}/AutoStart"
 RECORDS="${STATE}/Records"
 STAMP=$(date +%Y%m%d_%H%M%S 2>/dev/null)
 [ -n "$STAMP" ] || STAMP="unknown_time"
@@ -27,14 +28,29 @@ do
     [ -f "${STATE}/${NAME}" ] && cp "${STATE}/${NAME}" "${DEST}/${NAME}"
 done
 
+# AutoStart now keeps its own boot/config/verification evidence on the SD card.
+# Include that directory wholesale in a manual LOG RECORD so one snapshot is
+# sufficient to diagnose both manual START and boot-time START failures.
+if [ -d "$AUTOSTART" ]; then
+    mkdir -p "${DEST}/AutoStart"
+    for FILE in "${AUTOSTART}"/*; do
+        [ -f "$FILE" ] && cp "$FILE" "${DEST}/AutoStart/$(basename "$FILE")"
+    done
+fi
+
 {
-    echo "version=b3-log-record-v2"
+    echo "version=b3-log-record-v3"
     echo "record_path=${DEST}"
     echo "firmware_expected=MHI2Q_CN_AUG22_P1404"
     echo "mode=30fps-persistent"
     echo "direct_upload_marker=$([ -f "${APP}/DIRECT_UPLOAD_TEST" ] && echo present || echo absent)"
     echo "armed_marker=$([ -f "${APP}/ARMED" ] && echo present || echo absent)"
     echo "fps30_marker=$([ -f "${APP}/FPS30" ] && echo present || echo absent)"
+    echo "autostart_marker=$([ -f "${SCRIPTDIR}/.mmi_cockpit_mirror_autostart" ] && echo present || echo absent)"
+    if [ -f "${AUTOSTART}/autostart_status.txt" ]; then
+        echo "autostart_state=$(sed -n 's/^state=//p' "${AUTOSTART}/autostart_status.txt" 2>/dev/null | head -1)"
+        echo "autostart_detail=$(sed -n 's/^detail=//p' "${AUTOSTART}/autostart_status.txt" 2>/dev/null | head -1)"
+    fi
     date
     echo "----- locked artifacts cksum -----"
     for NAME in libcp_mirror.so libdirect_upload.so libport_waker.so \
@@ -73,9 +89,16 @@ echo "===== B3 LOG RECORD SAVED ====="
 echo "$DEST"
 echo "Files:"
 ls -l "$DEST"
+[ -d "${DEST}/AutoStart" ] && {
+    echo "AutoStart files:"
+    ls -l "${DEST}/AutoStart"
+}
 echo "----- current status -----"
 [ -f "${STATE}/direct_upload_status.txt" ] && cat "${STATE}/direct_upload_status.txt" \
     || echo "No B3 status exists yet."
+echo "----- AutoStart status -----"
+[ -f "${AUTOSTART}/autostart_status.txt" ] && cat "${AUTOSTART}/autostart_status.txt" \
+    || echo "No AutoStart boot status exists yet."
 echo "----- latest measured FPS -----"
 grep '^direct upload measured fps_x1000 capture_ms frames ' \
     "${STATE}/direct_upload.log" 2>/dev/null | tail -10
