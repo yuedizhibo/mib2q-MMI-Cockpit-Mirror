@@ -47,7 +47,7 @@ pid_alive() {
 write_status() {
     [ -n "$STATUS" ] || return 0
     {
-        echo "version=autostart-v3"
+        echo "version=autostart-v4"
         echo "state=$1"
         echo "attempt=$2"
         echo "detail=$3"
@@ -71,9 +71,6 @@ b3_is_active() {
     /eso/bin/apps/dmdt gs 2>/dev/null | grep -q 'context id: 76'
 }
 
-# startup.sh may run before the SD card is mounted. Keep the local /tmp log as
-# an early-boot fallback, but move all useful AutoStart diagnostics to the SD
-# card as soon as the Toolbox volume becomes available.
 N=0
 while [ "$N" -lt 60 ]; do
     [ -f "$MARKER" ] || { echo "AutoStart marker removed; exiting"; exit 0; }
@@ -109,9 +106,6 @@ rm -f "$TMPLOG"
 echo "AutoStart diagnostics moved to SD: ${AUTOLOGDIR}"
 write_status "WAITING_PREREQUISITES" 0 "Waiting for MMI services and verified controller"
 
-# Wait for the parts that START assumes are already available. This prevents a
-# one-shot early-boot race where START launches before DisplayManager or the
-# firmware-version shared memory is ready.
 N=0
 READY=0
 while [ "$N" -lt 60 ]; do
@@ -167,7 +161,7 @@ while [ "$ATTEMPT" -le 2 ]; do
     echo "===== AutoStart B3 attempt ${ATTEMPT}/2 ====="
     write_status "STARTING" "$ATTEMPT" "Launching production B3 START chain"
     rm -f "$B3_STATUS"
-    /bin/sh "$START"
+    "$START"
     START_RC=$?
     echo "B3 START command exited with code ${START_RC}"
 
@@ -212,7 +206,7 @@ while [ "$ATTEMPT" -le 2 ]; do
     cp "$JAVA_STATE" "${AUTOLOGDIR}/java_failed_attempt_${ATTEMPT}.txt" 2>/dev/null
     write_status "RETRYING" "$ATTEMPT" "$DETAIL"
 
-    [ -x "$STOP" ] && /bin/sh "$STOP" >/dev/null 2>&1
+    [ -x "$STOP" ] && "$STOP" >/dev/null 2>&1
 
     case "$DETAIL" in
         *Checksum*mismatch*|*Missing*)
@@ -225,7 +219,7 @@ while [ "$ATTEMPT" -le 2 ]; do
     [ "$ATTEMPT" -le 2 ] && sleep 8
 done
 
-[ -x "$STOP" ] && /bin/sh "$STOP" >/dev/null 2>&1
+[ -x "$STOP" ] && "$STOP" >/dev/null 2>&1
 export IPL_CONFIG_DIR=/etc/eso/production
 /eso/bin/apps/dmdt gs >"${AUTOLOGDIR}/dmdt_after_failure.txt" 2>&1
 write_status "FAILED" "$LAST_ATTEMPT" "$DETAIL"
