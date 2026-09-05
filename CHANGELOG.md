@@ -7,9 +7,16 @@ All notable project changes are documented here.
 ### Fixed
 
 - Fixed `AutoStart ON` failing with `Cockpit_Mirror.jar checksum mismatch` even when the head unit already had the exact verified controller installed and manual START worked normally.
+- `AutoStart ON` now preflights the persistent controller on the head unit before invoking controller installation logic.
 - `ensure_cockpit_mirror_controller.sh` now checks the persistent controller on the head unit first, matching START behavior.
 - If `/mnt/app/eso/hmi/lsd/jars/Cockpit_Mirror.jar` already matches the locked checksum and no legacy `carplay_hook.jar` is present, controller preparation succeeds without requiring the SD-card source JAR to match.
 - The SD-card source JAR is still strictly checksum-verified whenever an install or legacy migration is actually required, so an unverified JAR is never written to `/mnt/app`.
+- Added explicit detection for a Git LFS pointer accidentally copied to `Toolbox/apps/mmi-cockpit-mirror/Cockpit_Mirror.jar`; this now reports a clear LFS/source-file error instead of a generic checksum mismatch.
+
+### Update note
+
+- This hotfix does **not** require UNINSTALL. Re-sync/install the latest Toolbox scripts so the updated `autostart_cockpit_mirror_on.sh` and `ensure_cockpit_mirror_controller.sh` replace the installed copies.
+- A full Java reinstall/reboot is only required when the controller itself actually changes or is missing. An already verified installed controller is left untouched.
 
 ## 2026-09-05 — Full-chain Compatibility CHECK
 
