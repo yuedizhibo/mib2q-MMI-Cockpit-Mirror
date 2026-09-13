@@ -1,5 +1,8 @@
 # MIB2Q MMI Cockpit Mirror
 
+> [!IMPORTANT]
+> **This repository is no longer maintained and has been archived.** This project is being merged into [Lanye-z/MHI2Q-CarPlay-RGI-MMI-Mirror](https://github.com/Lanye-z/MHI2Q-CarPlay-RGI-MMI-Mirror). Please use that repository for all future development, releases, and issue reports.
+
 English | [简体中文](README.md)
 
 Mirrors the **complete live MMI output** of an MIB2Q head unit to the Audi Virtual Cockpit.

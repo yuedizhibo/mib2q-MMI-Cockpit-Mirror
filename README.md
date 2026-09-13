@@ -1,5 +1,8 @@
 # MIB2Q MMI Cockpit Mirror
 
+> [!IMPORTANT]
+> **本仓库已停止维护并归档。** 本项目今后与 [Lanye-z/MHI2Q-CarPlay-RGI-MMI-Mirror](https://github.com/Lanye-z/MHI2Q-CarPlay-RGI-MMI-Mirror) 合并，后续开发、发布和问题反馈均以该仓库为准。
+
 [English](README_EN.md) | 简体中文
 
 把 MIB2Q 中控当前输出的**完整 MMI 画面**实时镜像到 Audi Virtual Cockpit。
